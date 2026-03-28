@@ -22,6 +22,19 @@
         "sets": 1,
         "reps": 20,
         "weight": 0
+      },
+      {
+        "name": "动态腿后侧拉伸",
+        "sets": 1,
+        "reps": 10,
+        "weight": 0,
+        "note": "completed, form unsure"
+      },
+      {
+        "name": "髋关节绕环",
+        "sets": 1,
+        "reps": 20,
+        "weight": 0
       }
     ]
   }
