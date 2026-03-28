@@ -35,6 +35,12 @@
         "sets": 1,
         "reps": 20,
         "weight": 0
+      },
+      {
+        "name": "徒手深蹲",
+        "sets": 4,
+        "reps": 15,
+        "weight": 0
       }
     ]
   }
