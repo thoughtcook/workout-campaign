@@ -69,6 +69,12 @@
         "reps": 12,
         "weight": 20,
         "note": "per side, not familiar"
+      },
+      {
+        "name": "深蹲跳",
+        "sets": 2,
+        "reps": 8,
+        "weight": 0
       }
     ]
   }
