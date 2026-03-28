@@ -48,6 +48,13 @@
         "reps": 10,
         "weight": 20,
         "note": "felt difficult, first time"
+      },
+      {
+        "name": "弓步蹲",
+        "sets": 3,
+        "reps": 10,
+        "weight": 0,
+        "note": "each side"
       }
     ]
   }
