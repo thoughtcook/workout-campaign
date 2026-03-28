@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Johnny Fitness Quest</title>
+  <style>
+    :root {
+      --bg: oklch(0.14 0.02 270);
+      --bg-2: oklch(0.18 0.03 270);
+      --panel: linear-gradient(180deg, rgba(18,24,42,.9), rgba(12,16,30,.92));
+      --panel-2: linear-gradient(180deg, rgba(27,33,58,.85), rgba(17,20,35,.9));
+      --text: oklch(0.96 0.01 260);
+      --muted: oklch(0.73 0.02 260);
+      --line: rgba(255,255,255,.08);
+      --gold: oklch(0.84 0.16 90);
+      --cyan: oklch(0.78 0.14 220);
+      --violet: oklch(0.72 0.19 305);
+      --green: oklch(0.8 0.17 150);
+      --red: oklch(0.7 0.19 25);
+      --card-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+      --radius: 24px;
+      --font-sans: Inter, "SF Pro Display", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 0%, rgba(120, 85, 255, .22), transparent 30%),
+        radial-gradient(circle at 100% 0%, rgba(0, 210, 255, .18), transparent 28%),
+        linear-gradient(180deg, #0b0f1d 0%, #090c17 100%);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .container { max-width: 1300px; margin: 0 auto; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.3fr .9fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--card-shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.06), transparent 35%);
+      pointer-events: none;
+    }
+    .hero-main { padding: 28px; }
+    .badge-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px; border-radius: 999px;
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
+      color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    }
+    h1 {
+      font-size: clamp(28px, 5vw, 54px);
+      line-height: .98;
+      margin-bottom: 10px;
+      letter-spacing: -.03em;
+      font-weight: 900;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #fff 0%, #8ad7ff 42%, #d6a8ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-copy { color: var(--muted); font-size: 15px; line-height: 1.65; max-width: 60ch; }
+    .hero-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px;
+    }
+    .hero-stat {
+      padding: 16px; border-radius: 18px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+    }
+    .hero-stat .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; }
+    .hero-stat .value { font-size: 28px; font-weight: 900; }
+    .hero-stat .sub { color: #92f0cb; font-size: 12px; margin-top: 6px; }
+
+    .player-card { padding: 24px; background: var(--panel-2); }
+    .player-top { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+    .avatar {
+      width: 72px; height: 72px; border-radius: 20px;
+      background: linear-gradient(135deg, rgba(255,212,102,.25), rgba(139,92,246,.28));
+      display: grid; place-items: center; font-size: 30px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1);
+    }
+    .player-meta .name { font-weight: 900; font-size: 22px; }
+    .player-meta .class { color: var(--gold); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; margin-top: 4px; }
+    .level {
+      margin-left: auto; text-align: right;
+    }
+    .level .lv { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .level .num { font-size: 34px; font-weight: 900; color: var(--gold); }
+    .xp-wrap { margin-top: 8px; }
+    .xp-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .xp-bar {
+      height: 14px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; position: relative;
+    }
+    .xp-bar > div {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #5eead4, #60a5fa, #c084fc);
+      box-shadow: 0 0 18px rgba(96,165,250,.45);
+      transition: width .45s ease;
+    }
+    .quest-list { display: grid; gap: 10px; margin-top: 18px; }
+    .quest {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
+    }
+    .quest .left { display: flex; align-items: center; gap: 10px; }
+    .quest .icon { font-size: 20px; }
+    .quest .txt strong { display: block; font-size: 14px; }
+    .quest .txt span { color: var(--muted); font-size: 12px; }
+    .quest .reward { color: var(--gold); font-family: var(--font-mono); font-size: 13px; }
+
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 18px;
+    }
+    .stat-card {
+      padding: 18px; border-radius: 22px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--card-shadow);
+      position: relative; overflow: hidden;
+    }
+    .stat-card::after {
+      content: ""; position: absolute; top: -40px; right: -40px; width: 120px; height: 120px; border-radius: 999px;
+      background: radial-gradient(circle, rgba(255,255,255,.13), transparent 70%);
+    }
+    .stat-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .stat-title { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .stat-icon { font-size: 18px; opacity: .8; }
+    .stat-number { font-size: 36px; font-weight: 900; letter-spacing: -.03em; }
+    .stat-hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+    .main-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
+    .section { padding: 22px; }
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px;
+    }
+    .section-title { font-size: 18px; font-weight: 900; }
+    .section-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .chip {
+      padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.06);
+      color: var(--muted); font-size: 12px; font-weight: 700;
+    }
+
+    .calendar-wrap {
+      display: grid; gap: 10px;
+    }
+    .day-heads, .calendar-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+    }
+    .day-heads div {
+      color: var(--muted); font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .08em;
+    }
+    .day-cell {
+      min-height: 76px; border-radius: 18px; padding: 10px; position: relative; overflow: hidden;
+      border: 1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.03);
+      display: flex; flex-direction: column; justify-content: space-between;
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .day-cell:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.14); }
+    .day-cell.empty { background: transparent; border-color: transparent; }
+    .day-cell.rest { opacity: .55; }
+    .day-cell.lifted {
+      background: linear-gradient(180deg, rgba(96,165,250,.18), rgba(168,85,247,.14));
+      box-shadow: inset 0 0 0 1px rgba(138,215,255,.08);
+    }
+    .day-cell.today { outline: 2px solid rgba(255,212,102,.75); }
+    .day-num { font-size: 14px; font-weight: 800; }
+    .day-xp { color: var(--gold); font-size: 11px; font-family: var(--font-mono); }
+    .day-tag {
+      font-size: 11px; color: var(--muted); align-self: flex-start;
+      padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.06);
+    }
+
+    .chart-card, .feed-card { min-height: 280px; }
+    canvas { width: 100% !important; }
+
+    .exercise-list { display: grid; gap: 12px; }
+    .exercise-progress {
+      padding: 14px; border-radius: 18px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
+    }
+    .exercise-top { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .exercise-name { font-weight: 800; font-size: 14px; }
+    .exercise-score { color: var(--gold); font-family: var(--font-mono); font-size: 13px; }
+    .progress-bar {
+      height: 12px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.07);
+    }
+    .progress-bar > div {
+      height: 100%; width: 0%; border-radius: inherit;
+      background: linear-gradient(90deg, #34d399, #60a5fa, #c084fc);
+      transition: width .4s ease;
+    }
+    .exercise-meta { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font-size: 12px; }
+
+    .activity-feed { display: grid; gap: 10px; }
+    .feed-item {
+      padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
+      display: grid; gap: 6px;
+    }
+    .feed-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .feed-date { color: var(--muted); font-size: 12px; }
+    .feed-type { font-size: 13px; font-weight: 800; color: var(--cyan); }
+    .feed-body { color: #d9def1; font-size: 13px; line-height: 1.55; }
+    .feed-xp { color: var(--gold); font-family: var(--font-mono); font-size: 12px; }
+
+    .empty-state {
+      padding: 36px 18px; border-radius: 20px; text-align: center; color: var(--muted);
+      background: rgba(255,255,255,.03); border: 1px dashed rgba(255,255,255,.09);
+    }
+
+    .footer-tip {
+      margin-top: 18px; text-align: center; color: var(--muted); font-size: 12px;
+    }
+    .footer-tip code {
+      font-family: var(--font-mono);
+      color: var(--gold);
+      background: rgba(255,255,255,.05);
+      padding: 4px 8px; border-radius: 8px;
+    }
+
+    @media (max-width: 1080px) {
+      .hero, .main-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      body { padding: 14px; }
+      .stats-grid, .hero-grid { grid-template-columns: 1fr; }
+      .day-cell { min-height: 62px; padding: 8px; }
+      .player-top { align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <div class="panel hero-main">
+        <div class="badge-row">
+          <div class="badge">🎮 Fitness Quest Mode</div>
+          <div class="badge" id="updated-at">同步中…</div>
+        </div>
+        <h1><span class="gradient-text">Johnny</span><br/>Body Build Campaign</h1>
+        <p class="hero-copy">
+          减脂、增肌、腹肌、体型。别把这玩意儿当记账本，直接当成一局长期 RPG：
+          训练是刷经验，连续打卡是连击，体脂下降和线条出来才是真正的掉装备。
+        </p>
+        <div class="hero-grid" id="hero-grid"></div>
+      </div>
+
+      <aside class="panel player-card">
+        <div class="player-top">
+          <div class="avatar">⚔️</div>
+          <div class="player-meta">
+            <div class="name">Johnny</div>
+            <div class="class">Cut & Build Warrior</div>
+          </div>
+          <div class="level">
+            <div class="lv">Level</div>
+            <div class="num" id="level-num">1</div>
+          </div>
+        </div>
+
+        <div class="xp-wrap">
+          <div class="xp-meta">
+            <span>XP Progress</span>
+            <span id="xp-label">0 / 100 XP</span>
+          </div>
+          <div class="xp-bar"><div id="xp-fill"></div></div>
+        </div>
+
+        <div class="quest-list" id="quest-list"></div>
+      </aside>
+    </section>
+
+    <section class="stats-grid" id="stats-grid"></section>
+
+    <section class="main-grid">
+      <div class="left-stack" style="display:grid; gap:18px;">
+        <div class="panel section">
+          <div class="section-head">
+            <div>
+              <div class="section-title">📆 Quest Calendar</div>
+              <div class="section-sub" id="cal-month">本月训练分布</div>
+            </div>
+            <div class="chip" id="streak-chip">🔥 0 天连续</div>
+          </div>
+          <div class="calendar-wrap">
+            <div class="day-heads">
+              <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
+            </div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+          </div>
+        </div>
+
+        <div class="panel section chart-card">
+          <div class="section-head">
+            <div>
+              <div class="section-title">📈 Weekly Power Curve</div>
+              <div class="section-sub">按天统计训练组数，看看哪天最能打</div>
+            </div>
+            <div class="chip">本周</div>
+          </div>
+          <canvas id="volume-chart" height="160"></canvas>
+        </div>
+      </div>
+
+      <div class="right-stack" style="display:grid; gap:18px;">
+        <div class="panel section">
+          <div class="section-head">
+            <div>
+              <div class="section-title">🏆 Skill Mastery</div>
+              <div class="section-sub">本周动作完成度 / 主要刷分点</div>
+            </div>
+            <div class="chip">动作 XP</div>
+          </div>
+          <div class="exercise-list" id="exercise-progress"></div>
+        </div>
+
+        <div class="panel section feed-card">
+          <div class="section-head">
+            <div>
+              <div class="section-title">📝 Activity Feed</div>
+              <div class="section-sub">最近训练记录</div>
+            </div>
+            <div class="chip">Live Log</div>
+          </div>
+          <div class="activity-feed" id="workout-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer-tip">
+      记录格式建议：<code>深蹲 4×15 20kg</code> / <code>俯卧撑 3×12</code> / <code>平板支撑 3×45秒</code>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    const LOG_FILE = 'log.json';
+    let allData = [];
+    let volumeChart = null;
+    const DAY_NAMES = ['一','二','三','四','五','六','日'];
+
+    async function loadData() {
+      try {
+        const resp = await fetch(LOG_FILE + '?t=' + Date.now());
+        allData = await resp.json();
+      } catch (e) {
+        allData = [];
+      }
+      render();
+    }
+
+    function todayStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    function weekStart(d) {
+      const date = new Date(d);
+      const day = date.getDay();
+      const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+      const s = new Date(date.setDate(diff));
+      s.setHours(0,0,0,0);
+      return s;
+    }
+
+    function getWeekSessions() {
+      const now = new Date();
+      const ws = weekStart(now);
+      const we = new Date(ws);
+      we.setDate(we.getDate() + 7);
+      return allData.filter(d => {
+        const dt = new Date(d.date);
+        return dt >= ws && dt < we;
+      });
+    }
+
+    function getMonthSessions() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = now.getMonth();
+      return allData.filter(d => {
+        const dt = new Date(d.date);
+        return dt.getFullYear() === y && dt.getMonth() === m;
+      });
+    }
+
+    function calcSessionXP(session) {
+      const exerciseCount = session.exercises?.length || 0;
+      let reps = 0;
+      let weightedVolume = 0;
+      (session.exercises || []).forEach(e => {
+        const sets = parseInt(e.sets) || 0;
+        const rs = parseInt(e.reps) || 0;
+        const weight = parseFloat(e.weight) || 0;
+        reps += sets * rs;
+        weightedVolume += sets * rs * Math.max(weight, 1);
+      });
+      return Math.round(exerciseCount * 18 + reps * 0.7 + weightedVolume * 0.02);
+    }
+
+    function getTotalXP() {
+      return allData.reduce((sum, session) => sum + calcSessionXP(session), 0);
+    }
+
+    function getLevel(totalXP) {
+      return Math.max(1, Math.floor(totalXP / 120) + 1);
+    }
+
+    function getXPInLevel(totalXP) {
+      return totalXP % 120;
+    }
+
+    function calcStreak() {
+      if (!allData.length) return 0;
+      const dates = [...new Set(allData.map(s => s.date.slice(0,10)))].sort().reverse();
+      let streak = 0;
+      let cursor = new Date();
+      cursor.setHours(0,0,0,0);
+      for (const dateStr of dates) {
+        const ds = new Date(dateStr + 'T00:00:00');
+        const diff = (cursor - ds) / (1000*60*60*24);
+        if (diff === 0 || (streak === 0 && diff === 1)) {
+          streak++;
+          cursor.setDate(cursor.getDate() - 1);
+        } else if (diff === 1) {
+          streak++;
+          cursor.setDate(cursor.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+      return streak;
+    }
+
+    function renderHero() {
+      const weekSessions = getWeekSessions();
+      const totalXP = getTotalXP();
+      const level = getLevel(totalXP);
+      const currentXP = getXPInLevel(totalXP);
+      const streak = calcStreak();
+      const weekReps = weekSessions.reduce((sum, s) => sum + (s.exercises || []).reduce((a,e) => a + (parseInt(e.sets)||0)*(parseInt(e.reps)||0), 0), 0);
+      const weekVolume = weekSessions.reduce((sum, s) => sum + (s.exercises || []).reduce((a,e) => a + (parseInt(e.sets)||0)*(parseInt(e.reps)||0)*(parseFloat(e.weight)||0), 0), 0);
+      const sessionsThisMonth = getMonthSessions().length;
+
+      document.getElementById('level-num').textContent = level;
+      document.getElementById('xp-label').textContent = `${currentXP} / 120 XP`;
+      document.getElementById('xp-fill').style.width = `${(currentXP / 120) * 100}%`;
+
+      document.getElementById('hero-grid').innerHTML = `
+        <div class="hero-stat">
+          <div class="label">Weekly Reps</div>
+          <div class="value">${weekReps}</div>
+          <div class="sub">本周完成总次数</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Monthly Runs</div>
+          <div class="value">${sessionsThisMonth}</div>
+          <div class="sub">本月训练场次</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Volume</div>
+          <div class="value">${Math.round(weekVolume)}</div>
+          <div class="sub">本周估算训练容量</div>
+        </div>
+      `;
+
+      document.getElementById('quest-list').innerHTML = `
+        <div class="quest">
+          <div class="left"><div class="icon">🔥</div><div class="txt"><strong>连续打卡</strong><span>别断。断了就掉连击。</span></div></div>
+          <div class="reward">${streak} days</div>
+        </div>
+        <div class="quest">
+          <div class="left"><div class="icon">💥</div><div class="txt"><strong>本周出击</strong><span>保持至少 4 次训练频率</span></div></div>
+          <div class="reward">${weekSessions.length}/4</div>
+        </div>
+        <div class="quest">
+          <div class="left"><div class="icon">🏆</div><div class="txt"><strong>升级目标</strong><span>把本级 XP 刷满升下一级</span></div></div>
+          <div class="reward">${120-currentXP} XP</div>
+        </div>
+      `;
+    }
+
+    function renderStats() {
+      const weekSessions = getWeekSessions();
+      const monthSessions = getMonthSessions();
+      const totalXP = getTotalXP();
+      const streak = calcStreak();
+      const weekSets = weekSessions.reduce((sum, s) => sum + (s.exercises || []).reduce((a,e) => a + (parseInt(e.sets)||0), 0), 0);
+      const monthSets = monthSessions.reduce((sum, s) => sum + (s.exercises || []).reduce((a,e) => a + (parseInt(e.sets)||0), 0), 0);
+      const weekVolume = weekSessions.reduce((sum, s) => sum + (s.exercises || []).reduce((a,e) => a + (parseInt(e.sets)||0)*(parseInt(e.reps)||0)*(parseFloat(e.weight)||0), 0), 0);
+
+      document.getElementById('stats-grid').innerHTML = `
+        <article class="stat-card">
+          <div class="stat-top"><div class="stat-title">本周训练</div><div class="stat-icon">⚔️</div></div>
+          <div class="stat-number">${weekSessions.length}</div>
+          <div class="stat-hint">这周出击次数</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-top"><div class="stat-title">本周总组数</div><div class="stat-icon">📦</div></div>
+          <div class="stat-number">${weekSets}</div>
+          <div class="stat-hint">每一组都算经验</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-top"><div class="stat-title">本周容量</div><div class="stat-icon">⚡</div></div>
+          <div class="stat-number">${Math.round(weekVolume)}</div>
+          <div class="stat-hint">估算训练量（kg）</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-top"><div class="stat-title">累计 XP</div><div class="stat-icon">👑</div></div>
+          <div class="stat-number">${totalXP}</div>
+          <div class="stat-hint">连续 ${streak} 天在刷号</div>
+        </article>
+      `;
+      document.getElementById('streak-chip').textContent = `🔥 ${streak} 天连续`;
+    }
+
+    function renderCalendar() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+      document.getElementById('cal-month').textContent = `${year}年${monthNames[month]} · 训练热力格`;
+
+      let html = '';
+      const offset = firstDay === 0 ? 6 : firstDay - 1;
+      for (let i = 0; i < offset; i++) html += '<div class="day-cell empty"></div>';
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const sessions = allData.filter(s => s.date.slice(0,10) === dateStr);
+        const xp = sessions.reduce((sum, s) => sum + calcSessionXP(s), 0);
+        const isToday = dateStr === todayStr();
+        let cls = 'day-cell';
+        if (sessions.length === 0) cls += ' rest'; else cls += ' lifted';
+        if (isToday) cls += ' today';
+        const tag = sessions.length ? `${sessions.length} 场` : 'rest';
+        html += `
+          <div class="${cls}" title="${dateStr} · XP ${xp}">
+            <div class="day-num">${d}</div>
+            <div class="day-tag">${tag}</div>
+            <div class="day-xp">${sessions.length ? '+'+xp+' XP' : ''}</div>
+          </div>
+        `;
+      }
+      document.getElementById('calendar-grid').innerHTML = html;
+    }
+
+    function renderChart() {
+      const ctx = document.getElementById('volume-chart').getContext('2d');
+      const weekSessions = getWeekSessions();
+      const volumes = [0,0,0,0,0,0,0];
+      weekSessions.forEach(s => {
+        const dt = new Date(s.date);
+        const idx = (dt.getDay() + 6) % 7;
+        volumes[idx] += (s.exercises || []).reduce((a,e) => a + (parseInt(e.sets)||0), 0);
+      });
+      if (volumeChart) volumeChart.destroy();
+      volumeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: DAY_NAMES,
+          datasets: [{
+            data: volumes,
+            borderRadius: 12,
+            borderSkipped: false,
+            backgroundColor: [
+              'rgba(94,234,212,.75)','rgba(96,165,250,.75)','rgba(139,92,246,.75)','rgba(236,72,153,.75)','rgba(250,204,21,.75)','rgba(52,211,153,.75)','rgba(248,113,113,.75)'
+            ]
+          }]
+        },
+        options: {
+          animation: { duration: 700 },
+          plugins: { legend: { display: false }, tooltip: { backgroundColor: '#12182a', borderColor: 'rgba(255,255,255,.1)', borderWidth: 1 } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,.08)' }, ticks: { color: '#93a0c5' } },
+            x: { grid: { display: false }, ticks: { color: '#93a0c5' } }
+          }
+        }
+      });
+    }
+
+    function renderExercises() {
+      const weekSessions = getWeekSessions();
+      const map = {};
+      weekSessions.forEach(s => {
+        (s.exercises || []).forEach(e => {
+          if (!map[e.name]) map[e.name] = { sets: 0, reps: 0 };
+          map[e.name].sets += parseInt(e.sets) || 0;
+          map[e.name].reps += (parseInt(e.sets)||0) * (parseInt(e.reps)||0);
+        });
+      });
+      const items = Object.entries(map).sort((a,b) => b[1].sets - a[1].sets).slice(0, 6);
+      if (!items.length) {
+        document.getElementById('exercise-progress').innerHTML = '<div class="empty-state">还没刷到动作数据。你一发训练记录，这里就会开始升级。</div>';
+        return;
+      }
+      const maxSets = Math.max(...items.map(([,v]) => v.sets), 1);
+      document.getElementById('exercise-progress').innerHTML = items.map(([name, v]) => {
+        const pct = Math.max(10, Math.round(v.sets / maxSets * 100));
+        return `
+          <div class="exercise-progress">
+            <div class="exercise-top">
+              <div class="exercise-name">${name}</div>
+              <div class="exercise-score">+${v.sets * 8} XP</div>
+            </div>
+            <div class="progress-bar"><div style="width:${pct}%"></div></div>
+            <div class="exercise-meta"><span>本周 ${v.sets} 组</span><span>${v.reps} reps</span></div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr);
+      return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+
+    function typeName(type) {
+      const map = { legs:'🦵 下肢', push:'💪 推', pull:'🪑 拉', hiit:'🏃 HIIT', stretch:'🧘 恢复', full:'🔥 全身', rest:'😴 休息' };
+      return map[type] || '🏋️ 训练';
+    }
+
+    function renderFeed() {
+      if (!allData.length) {
+        document.getElementById('workout-list').innerHTML = '<div class="empty-state">还没有记录。开始你的第一条训练日志吧。</div>';
+        return;
+      }
+      const sorted = [...allData].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+      document.getElementById('workout-list').innerHTML = sorted.map(s => {
+        const xp = calcSessionXP(s);
+        const body = (s.exercises || []).length
+          ? (s.exercises || []).map(e => `• ${e.name} ${e.sets}×${e.reps}${e.weight ? ' @'+e.weight+'kg' : ''}`).join('<br>')
+          : '暂无动作明细';
+        return `
+          <article class="feed-item">
+            <div class="feed-top">
+              <div>
+                <div class="feed-type">${typeName(s.dayType)}</div>
+                <div class="feed-date">${formatDate(s.date)}</div>
+              </div>
+              <div class="feed-xp">+${xp} XP</div>
+            </div>
+            <div class="feed-body">${body}</div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function renderUpdatedAt() {
+      document.getElementById('updated-at').textContent = `同步于 ${new Date().toLocaleString('zh-CN')}`;
+    }
+
+    function render() {
+      renderHero();
+      renderStats();
+      renderCalendar();
+      renderChart();
+      renderExercises();
+      renderFeed();
+      renderUpdatedAt();
+    }
+
+    loadData();
+    setInterval(loadData, 30000);
+  </script>
+</body>
+</html>
