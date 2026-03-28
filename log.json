@@ -75,6 +75,13 @@
         "sets": 2,
         "reps": 8,
         "weight": 0
+      },
+      {
+        "name": "平板支撑",
+        "sets": 3,
+        "reps": 45,
+        "weight": 0,
+        "note": "seconds"
       }
     ]
   }
