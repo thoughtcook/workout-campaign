@@ -95,6 +95,13 @@
         "reps": 180,
         "weight": 0,
         "note": "3min"
+      },
+      {
+        "name": "高抬腿",
+        "sets": 1,
+        "reps": 30,
+        "weight": 0,
+        "note": "30sec"
       }
     ]
   }
