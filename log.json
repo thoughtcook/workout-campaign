@@ -84,5 +84,18 @@
         "note": "seconds"
       }
     ]
+  },
+  {
+    "date": "2026-04-02T07:02:00+08:00",
+    "dayType": "hiit",
+    "exercises": [
+      {
+        "name": "跳绳热身",
+        "sets": 1,
+        "reps": 180,
+        "weight": 0,
+        "note": "3min"
+      }
+    ]
   }
 ]
