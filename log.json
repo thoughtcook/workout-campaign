@@ -102,6 +102,25 @@
         "reps": 30,
         "weight": 0,
         "note": "30sec"
+      },
+      {
+        "name": "徒手深蹲热身",
+        "sets": 1,
+        "reps": 20,
+        "weight": 0
+      },
+      {
+        "name": "肩绕环",
+        "sets": 1,
+        "reps": 20,
+        "weight": 0
+      },
+      {
+        "name": "跳绳HIIT",
+        "sets": 8,
+        "reps": 30,
+        "weight": 0,
+        "note": "8 rounds, 30s fast intervals"
       }
     ]
   }
