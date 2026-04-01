@@ -121,6 +121,13 @@
         "reps": 30,
         "weight": 0,
         "note": "8 rounds, 30s fast intervals"
+      },
+      {
+        "name": "核心回路",
+        "sets": 3,
+        "reps": 1,
+        "weight": 0,
+        "note": "3 rounds: mountain climber, reverse crunch, bear plank shoulder tap, side plank"
       }
     ]
   }
