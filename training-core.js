@@ -62,8 +62,9 @@
     const plan = plans[index];
     let reason = last ? `上次完成${names[last.planId]}，下一站是${plan.name}；休息和未完成记录不推进顺序。` : '从上肢 A 建立器械基线，前 8 次力量训练使用适应组数。';
     let mode = 'normal';
-    const lastStrength = past.find(s=>plans.some(p=>p.id===s.planId));
-    const recentSame = past.find(s=>plans.find(p=>p.id===s.planId)?.region===plan.region);
+    const worked = s => s.exercises.some(e=>e.sets.some(x=>x.done));
+    const lastStrength = past.find(s=>plans.some(p=>p.id===s.planId)&&worked(s));
+    const recentSame = past.find(s=>plans.find(p=>p.id===s.planId)?.region===plan.region&&worked(s));
     if (readiness.pain==='yes') { mode='stop'; reason='今天有疼痛：暂停诱发疼痛的动作，先记录症状；不能依据算法判断可否继续训练。'; }
     else if (isFatigued(readiness)) { mode='light'; reason='恢复反馈偏低：优先休息或轻活动；若训练，每个动作减少一组，不加重量。'; }
     else if (lastStrength && new Date(at)-new Date(lastStrength.date)<20*3600000) { mode='rest'; reason='距离最近一次力量训练不足 20 小时，今天优先恢复，不赶进度。'; }
@@ -94,7 +95,7 @@
     if(last.form!=='good' || last.pain!=='none' || done.some(x=>x.rir===null)) return result('维持','上次动作质量、疼痛或余力信息不足，先完善记录。',weight);
     const previous=history[1];
     const sameLoad = previous && previous.exercise.sets.filter(x=>x.done).every(x=>x.load===weight);
-    const sameTarget = previous && previous.exercise.targetHigh===last.targetHigh && previous.exercise.targetSets===last.targetSets && e.targetHigh===last.targetHigh && e.targetSets===last.targetSets;
+    const sameTarget = previous && previous.exercise.targetHigh===last.targetHigh && previous.exercise.targetLow===last.targetLow && previous.exercise.targetSets===last.targetSets && e.targetHigh===last.targetHigh && e.targetLow===last.targetLow && e.targetSets===last.targetSets;
     if(previous && dateKey(previous.session.date)!==dateKey(recent.session.date) && qualified(recent) && qualified(previous) && sameLoad && sameTarget && ['machine','per-hand','total'].includes(e.loadUnit) && e.metric==='reps') {
       return result('可加一档','同一负荷、目标与器械连续两次全部达标，余力 ≥2；使用现场最小增量，加重后回到次数下限。',weight);
     }
@@ -103,7 +104,10 @@
   function makeExercise(def, sessions, at, readiness, adaptation) {
     const old=sessions.filter(s=>eligibleBefore(s,at)).sort((a,b)=>new Date(b.date)-new Date(a.date)).flatMap(s=>s.exercises||[]).find(e=>e.id===def.id);
     const targetSets=Math.max(1,(adaptation?Math.min(2,def.sets):def.sets)-(isFatigued(readiness)?1:0));
-    return {id:def.id,name:def.name,variant:old?.variant||def.name,equipment:old?.equipment||'',loadUnit:old?.loadUnit||def.unit,metric:old?.metric||(def.id==='side-plank'?'seconds':'reps'),targetSets,targetLow:def.low,targetHigh:def.high,form:'unknown',pain:'unknown',sets:Array.from({length:targetSets},()=>({load:null,value:null,rir:null,done:false})),note:''};
+    const metric=old?.metric||(def.id==='side-plank'?'seconds':'reps');
+    const changed=old && (old.variant!==def.name || old.metric!==(def.id==='side-plank'?'seconds':'reps') || old.loadUnit!==def.unit);
+    const loadUnit=old?.loadUnit||def.unit;
+    return {id:def.id,name:def.name,variant:old?.variant||def.name,equipment:old?.equipment||(['body','band'].includes(loadUnit)?'垫上 / 徒手':''),loadUnit,metric,targetSets,targetLow:changed?old.targetLow:def.low,targetHigh:changed?old.targetHigh:def.high,form:'unknown',pain:'unknown',sets:Array.from({length:targetSets},()=>({load:['body','band'].includes(loadUnit)?0:null,value:null,rir:null,done:false})),note:''};
   }
   function fresh() { return {version:2,sessions:[],measurements:[],trash:[],draft:null}; }
   const fail = message => { throw new Error(message); };
@@ -111,7 +115,7 @@
   function text(v,max=300) { if(typeof v!=='string'||v.length>max) fail('文字字段格式或长度不正确'); return v; }
   function number(v,min,max,nullable=false) { if(nullable&&v===null)return v; if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)fail('数值超出允许范围');return v; }
   function choice(v,values) {if(!values.includes(v))fail('记录含有未知选项');return v;}
-  function timestamp(v) {text(v,50);if(!/^\d{4}-\d{2}-\d{2}T/.test(v)||!Number.isFinite(Date.parse(v)))fail('日期格式不正确');return v;}
+  function timestamp(v) {text(v,50);if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(v)||!Number.isFinite(Date.parse(v)))fail('日期格式不正确');const day=v.slice(0,10);if(new Date(day+'T12:00:00Z').toISOString().slice(0,10)!==day)fail('日期不存在');return v;}
   function readiness(v) {if(!obj(v))fail('恢复信息缺失');return {sleep:number(v.sleep,0,24,true),energy:number(v.energy,1,5,true),soreness:number(v.soreness,0,3,true),pain:choice(v.pain,['unknown','none','yes'])};}
   function validateExercise(v,draft=false) {
     if(!obj(v))fail('动作格式错误');
@@ -128,7 +132,10 @@
     if(!s.id || !Array.isArray(v.exercises)||v.exercises.length>20)fail('记录标识或动作数量无效');
     s.exercises=v.exercises.map(e=>validateExercise(e,draft));
     if(new Set(s.exercises.map(e=>e.id)).size!==s.exercises.length)fail('同一课表内动作标识重复');
-    if(!draft&&plans.some(p=>p.id===s.planId)&&s.status==='completed'&&(!s.exercises.length||s.exercises.some(e=>e.sets.filter(x=>x.done).length<e.targetSets)))fail('尚未完成目标组数，请保存为部分完成');
+    const plan=plans.find(p=>p.id===s.planId);
+    if(plan&&s.exercises.some(e=>!plan.exercises.some(x=>x.id===e.id)))fail('动作不属于本次课表');
+    if(!plan&&s.exercises.length)fail('非力量课表不应包含力量动作');
+    if(!draft&&plan&&s.status==='completed'&&(plan.exercises.some(x=>!s.exercises.some(e=>e.id===x.id))||s.exercises.some(e=>e.sets.filter(x=>x.done).length<e.targetSets)))fail('尚未完成目标组数，请保存为部分完成');
     if(!draft&&s.planId==='cardio'&&s.status==='completed'&&!(s.cardioMinutes>0))fail('请填写实际有氧分钟数');
     if(!draft&&s.planId==='mobility'&&s.status==='completed'&&!(s.mobilityMinutes>0))fail('请填写实际活动度分钟数');
     return s;
@@ -158,9 +165,9 @@
     return {state:validateState(a),added,skipped};
   }
   function weekly(sessions,at,count=8) {
-    const start=weekKey(at),today=dateKey(at), results=[];
+    const start=weekKey(at), results=[];
     for(let i=count-1;i>=0;i--){const key=dateKey(new Date(ordinal(start)-i*7*dayMs));results.push({key,label:key.slice(5),strength:0,sets:0,cardio:0,mobility:0,recovery:0});}
-    for(const s of sessions){if(dateKey(s.date)>today)continue;const row=results.find(w=>w.key===weekKey(s.date));if(!row)continue;row.strength+=completedStrength(s)?1:0;row.sets+=s.exercises.reduce((a,e)=>a+e.sets.filter(x=>x.done).length,0);row.cardio+=s.cardioMinutes||0;row.mobility+=s.mobilityMinutes||0;row.recovery+=(s.planId==='recovery'&&s.status==='completed')?1:0;}
+    for(const s of sessions){if(new Date(s.date)>new Date(at))continue;const row=results.find(w=>w.key===weekKey(s.date));if(!row)continue;row.strength+=completedStrength(s)?1:0;row.sets+=s.exercises.reduce((a,e)=>a+e.sets.filter(x=>x.done).length,0);row.cardio+=s.cardioMinutes||0;row.mobility+=s.mobilityMinutes||0;row.recovery+=(s.planId==='recovery'&&s.status==='completed')?1:0;}
     return results;
   }
   return {ZONE,plans,units,names,clone,dateKey,weekKey,daysBetween,isFatigued,readyKnown,nextPlan,recommend,makeExercise,identity,matchingHistory,fresh,validateState,validateSession,validateMeasurement,mergeBackup,weekly,completedStrength};
