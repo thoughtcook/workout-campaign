@@ -220,6 +220,18 @@
       background: rgba(255,255,255,.03); border: 1px dashed rgba(255,255,255,.09);
     }
 
+    #gym-plan { margin-bottom: 18px; }
+    #gym-plan select { max-width: 100%; padding: 10px; margin: 12px 0; background: #18213a; color: var(--text); border: 1px solid #65718e; border-radius: 10px; font: inherit; }
+    #gym-plan table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    #gym-plan th, #gym-plan td { padding: 12px 8px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.6; overflow-wrap: anywhere; }
+    #gym-plan th { color: var(--cyan); }
+    #gym-plan th:nth-child(1) { width: 26%; }
+    #gym-plan th:nth-child(2) { width: 25%; }
+    #gym-plan details { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+    #gym-plan summary { cursor: pointer; font-weight: 700; }
+    #gym-plan details p, .gym-note { color: var(--muted); line-height: 1.8; margin-top: 10px; }
+    #gym-plan a { color: var(--cyan); }
+    .gym-budget { display: flex; gap: 10px; flex-wrap: wrap; font-size: 14px; margin: 18px 0; }
     .footer-tip {
       margin-top: 18px; text-align: center; color: var(--muted); font-size: 12px;
     }
@@ -283,6 +295,7 @@
       </aside>
     </section>
 
+    <section class="panel section" id="gym-plan" aria-label="健身房训练计划"></section>
     <section class="stats-grid" id="stats-grid"></section>
 
     <section class="main-grid">
@@ -345,19 +358,26 @@
     </div>
   </div>
 
+  <script src="training-core.js"></script>
+  <script src="gym-plan.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script>
     const LOG_FILE = 'log.json';
     let allData = [];
     let volumeChart = null;
+    let loadError = false;
     const DAY_NAMES = ['一','二','三','四','五','六','日'];
 
     async function loadData() {
       try {
         const resp = await fetch(LOG_FILE + '?t=' + Date.now());
-        allData = await resp.json();
+        if (!resp.ok) throw new Error('训练记录读取失败');
+        const data = await resp.json();
+        if (!Array.isArray(data)) throw new Error('训练记录格式错误');
+        allData = data;
+        loadError = false;
       } catch (e) {
-        allData = [];
+        loadError = true;
       }
       render();
     }
@@ -570,6 +590,26 @@
         volumes[idx] += (s.exercises || []).reduce((a,e) => a + (parseInt(e.sets)||0), 0);
       });
       if (volumeChart) volumeChart.destroy();
+      if (typeof Chart !== 'function') {
+        // A local fallback keeps the weekly chart available if the CDN fails.
+        const canvas = ctx.canvas;
+        canvas.width = 700;
+        canvas.height = 220;
+        ctx.clearRect(0, 0, 700, 220);
+        const maximum = Math.max(1, ...volumes);
+        ctx.font = '14px system-ui';
+        ctx.textAlign = 'center';
+        volumes.forEach((value, index) => {
+          const x = 55 + index * 95;
+          const height = value / maximum * 155;
+          ctx.fillStyle = '#60a5fa';
+          ctx.fillRect(x, 180 - height, 45, height);
+          ctx.fillStyle = '#d9def1';
+          ctx.fillText(String(value), x + 22, 170 - height);
+          ctx.fillText(DAY_NAMES[index], x + 22, 208);
+        });
+        return;
+      }
       volumeChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -662,7 +702,9 @@
     }
 
     function renderUpdatedAt() {
-      document.getElementById('updated-at').textContent = `同步于 ${new Date().toLocaleString('zh-CN')}`;
+      document.getElementById('updated-at').textContent = loadError
+        ? '记录读取失败；保留上次显示，稍后重试'
+        : `读取于 ${new Date().toLocaleString('zh-CN')}`;
     }
 
     function render() {
