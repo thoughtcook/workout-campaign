@@ -56,6 +56,43 @@ References:
 - https://acsm.org/resistance-training-guidelines-update-2026/
 - https://orthoinfo.aaos.org/en/diseases--conditions/snapping-hip/
 
+## Muscle mission and phone layout
+
+The home screen includes an original front/back SVG muscle schematic. It is a
+simplified, bilateral teaching diagram, not a diagnostic anatomical atlas or a
+3D model. Tap a region or its labelled chip to inspect the associated exercises.
+Primary targets are amber; supporting regions use teal/dashed outlines; saved
+completed sets fill the regions with green energy. Side selection also supports
+keyboard input and labelled controls. The default is one view on phones and
+both views on larger screens; either can be changed.
+
+Goal mode uses the selected plan or active draft's actual exercise variants and
+target sets. Logged mode uses saved records on the chosen UTC+8 calendar day.
+Only checked sets containing valid actual load and reps/seconds contribute.
+Partial sessions contribute only their completed sets. Drafts do not inject
+energy. Successful saves reveal the logged body view with a short injection
+animation; reduced-motion preferences disable it. Edits, archive/restore and
+imports recompute energy from the journal, so it is not a separate counter.
+
+Each muscle's energy is completed associated sets / declared associated target
+sets, capped visually at 100%. Primary and supporting set counts remain distinct.
+A compound set can involve several muscles, so muscle set counts must not be
+added to calculate total session volume. Energy is a completion metaphor, not a
+measurement of activation, physiological energy, fatigue, recovery or hypertrophy.
+Unknown variants are shown as unmapped rather than guessed. Cardio, mobility,
+rest and ambiguous legacy records are not converted to muscle energy.
+
+The phone layout puts the muscle model before the recording form, uses a bottom
+navigation bar with safe-area spacing, 44+ px controls, larger form inputs to
+avoid iOS focus zoom, and a sticky save action above the bottom navigation.
+The model can be reopened for any recorded date from a timeline node. No journal
+schema/storage-key change is required; existing v2 records and backups remain
+compatible. Original sources are linked for context, not copied as diagram art:
+
+- https://www.acefitness.org/resources/everyone/exercise-library/
+- https://www.acefitness.org/resources/everyone/exercise-library/25/incline-chest-press/
+- https://www.nasm.org/resource-center/exercise-library/romanian-deadlift-barbell
+
 ## Storage, privacy and backup
 
 New training, recovery, measurements and drafts live in `localStorage` under
@@ -88,9 +125,11 @@ boundaries use Asia/Singapore (UTC+8); weeks start Monday.
 - `index.html`, `styles.css`: responsive interface
 - `app.js`: journal forms, timeline, accessible SVG charts, timer, backup flows
 - `training-core.js`: pure training rules, validation and aggregation
+- `muscle-map.js`: explicit variant-to-muscle mapping, completion aggregation and vector schematic
 - `journal-store.js`: validated durable storage with stale-write protection
 - `log.json`: unchanged read-only legacy records
 - `tests/training.test.cjs`: progression, schema, backup and storage regressions
+- `tests/muscle-map.test.cjs`: muscle mapping, partial credit, visual states and record-derived energy
 
 ## Local use and checks
 

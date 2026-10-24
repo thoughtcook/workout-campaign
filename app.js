@@ -15,6 +15,9 @@
   let lastExport=null;
   const storage={getItem:key=>window.localStorage.getItem(key),setItem:(key,value)=>window.localStorage.setItem(key,value)};
   const store=new JournalStore.Store(storage);
+  let bodyMode=store.state.sessions.some(s=>T.dateKey(s.date)===T.dateKey(now())&&s.exercises.some(e=>Muscles.doneSets(e)>0))?'logged':'goal';
+  let bodySide=window.matchMedia?.('(min-width: 761px)').matches?'both':'front', selectedMuscle=null, bodyData=null, lastBodyContext=null;
+  $('body-date').value=T.dateKey(now());$('body-date').max=T.dateKey(now());
   function tell(message,error=false){$('notice').textContent=message;$('notice').hidden=false;$('notice').style.borderColor=error?'var(--red)':'';}
   function storageError(error){$('storage-error').hidden=false;$('storage-error').textContent=error.message||String(error);$('draft-state').textContent='保存异常 · 请勿关闭';}
   function mutate(fn){try{store.change(fn);$('storage-error').hidden=true;return true;}catch(e){storageError(e);return false;}}
@@ -61,7 +64,57 @@
     const preview=chosen?`<details open><summary>本次课表预览 · ${esc(chosen.name)}</summary><ul class="small muted">${chosen.exercises.map(def=>{const e=T.makeExercise(def,sessions(),at,readiness(),result.adaptation);return `<li>${esc(e.variant)} · ${e.targetSets} × ${e.targetLow}–${e.targetHigh} ${unit(e)}</li>`;}).join('')}</ul></details>`:'<p class="small">本次选择：'+esc(T.names[$('plan-choice').value])+'。记录实际完成分钟与恢复感受即可。</p>';
     $('next-plan').innerHTML=`<h2>${esc(result.mode==='normal'?result.plan.name:result.mode==='stop'?'先关注疼痛':result.mode==='rest'?'今天先恢复':'轻量一点，也可以')}</h2><p>${esc(result.reason)}</p><p class="small">${result.adaptation?'适应阶段 · 前 8 次力量训练':'常规阶段'} · ${esc(result.plan.focus)}</p>${preview}`;
     $('readiness-note').textContent=result.reason+(T.readyKnown(readiness())?'':' 恢复信息未填全时，不触发加重建议。')+(draft?' 本次组数已在开始时确定；若中途疲劳，可减组或保存为部分完成。':'');
+    renderBody();
   }
+  function renderBody(animate=false){
+    if(!$('plan-choice'))return;
+    const editingDate=$('session-date').value||T.dateKey(now());
+    if(bodyMode==='goal')$('body-date').value=editingDate;
+    const date=$('body-date').value||T.dateKey(now());
+    const saved=store.state.sessions.filter(s=>T.dateKey(s.date)===date&&Date.parse(s.date)<=Date.now());
+    let planned=[],actual=[],context='';
+    if(bodyMode==='logged'){
+      planned=saved.flatMap(s=>s.exercises);actual=planned;
+      const strength=saved.filter(s=>s.exercises.length);
+      context=`${date} · ${strength.length} 条力量记录 · 仅统计实际完成组`;
+      $('body-title').textContent=date===T.dateKey(now())?'今天，练过这些肌群':'这一天，练过这些肌群';
+      $('body-phase').textContent=strength.some(s=>s.exercises.some(e=>Muscles.doneSets(e)>0))?'能量已从记录入账':'等待第一条完成组';
+    }else{
+      const at=$('session-date').value&&$('session-time').value?selectedTime():now(),r=readiness(),plan=T.plans.find(p=>p.id===$('plan-choice').value);
+      const adaptation=T.nextPlan(sessions(),at,r).adaptation;
+      planned=draft?draft.exercises:plan?plan.exercises.map(e=>T.makeExercise(e,sessions(),at,r,adaptation)):[];
+      context=`${editingDate} · ${T.names[draft?.planId||$('plan-choice').value]} · ${draft?'草稿尚未注入能量':'训练前查看目标区域'}`;
+      $('body-title').textContent='本次，要练这些肌群';
+      $('body-phase').textContent=draft?'正在记录 · 待保存':'目标已标记';
+    }
+    bodyData=Muscles.summarize(planned,actual);
+    const contextKey=[bodyMode,date,draft?.id||'',bodyMode==='goal'?$('plan-choice').value:''].join('|');
+    const contextChanged=lastBodyContext!==contextKey;
+    if(contextChanged||!selectedMuscle||!bodyData.groups[selectedMuscle])selectedMuscle=bodyData.active.find(g=>!g.secondary&&(bodySide==='both'||g.views.includes(bodySide)))?.id||bodyData.active.find(g=>!g.secondary)?.id||bodyData.active[0]?.id||null;
+    lastBodyContext=contextKey;$('muscle-section').dataset.mode=bodyMode;
+    if(contextChanged&&bodyData.active.length&&!bodyData.active.some(g=>g.views.includes(bodySide))&&bodySide!=='both')bodySide=bodyData.active[0].views[0];
+    $('body-context').textContent=context;$('body-date').disabled=bodyMode==='goal';
+    for(const b of document.querySelectorAll('[data-body-mode]'))b.setAttribute('aria-pressed',String(b.dataset.bodyMode===bodyMode));
+    for(const b of document.querySelectorAll('[data-body-side]'))b.setAttribute('aria-pressed',String(b.dataset.bodySide===bodySide));
+    $('body-model').dataset.side=bodySide;
+    $('body-model').innerHTML='<div class="body-front">'+Muscles.svg('front',bodyData,selectedMuscle,animate)+'</div><div class="body-back">'+Muscles.svg('back',bodyData,selectedMuscle,animate)+'</div>';
+    const uniqueDone=actual.reduce((sum,e)=>sum+Muscles.doneSets(e),0),uniqueTarget=planned.reduce((sum,e)=>sum+e.targetSets,0);
+    $('body-totals').innerHTML=`<span><b>${bodyData.active.filter(g=>!g.secondary).length}</b> 主要肌群</span><span><b>${bodyMode==='logged'?uniqueDone:uniqueTarget}</b> ${bodyMode==='logged'?'已完成组':'目标组'}</span>`;
+    $('muscle-chips').innerHTML=bodyData.active.map(g=>`<button type="button" data-muscle="${g.id}" class="muscle-chip${g.secondary?' support':''}${g.percent>0?' has-energy':''}" aria-pressed="${g.id===selectedMuscle}"><span>${esc(g.name)}</span><small>${bodyMode==='logged'?(g.donePrimary+g.doneSecondary)+' / '+(g.targetPrimary+g.targetSecondary)+' 组':g.secondary?'协同':'主要'}</small></button>`).join('');
+    $('body-empty').textContent=bodyData.unknown.length?'未自动匹配：'+bodyData.unknown.join('、')+'。为避免错误，不给未知动作分配肌群能量。':!bodyData.active.length?(bodyMode==='logged'?'这一天没有力量肌群记录。有氧、活动度和休息会保留在时间轴中。':'本次是有氧、活动度或恢复安排，不模拟力量肌群充能。'):'';
+    $('body-cta').textContent=bodyMode==='logged'?'查看训练时间轴 ↗':draft||store.state.draft?'继续训练记录 ↗':'开始记录本次训练 ↗';
+    renderMuscleDetail();
+  }
+  function renderMuscleDetail(){
+    if(!selectedMuscle||!bodyData){$('muscle-detail').innerHTML='<p class="small muted">先选择力量课表，或查看已有记录。</p>';return;}
+    const g=bodyData.groups[selectedMuscle],target=g.targetPrimary+g.targetSecondary,done=g.donePrimary+g.doneSecondary;
+    $('muscle-detail').innerHTML=`<div class="muscle-detail-heading"><div><h3>${esc(g.name)}</h3><p class="small muted">${esc(g.detail)} · ${g.state==='idle'?'本次未涉及':g.secondary?'协同参与':'主要训练'}</p></div><b>${bodyMode==='logged'?g.percent+'%':g.state==='idle'?'未安排':'待训练'}</b></div><div class="energy-track" role="progressbar" aria-label="${esc(g.name)}已保存组数完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${g.percent}"><span style="width:${g.percent}%"></span></div><p class="small muted">${bodyMode==='logged'?`实际 ${done} / 目标 ${target} 组；左右合计为一组。`:`计划 ${target} 组；保存后按实际完成填入能量。`}</p><ul>${g.moves.map(m=>`<li><span>${esc(m.name)}<small>${m.role==='primary'?'主要':'协同'}</small></span><b>${bodyMode==='logged'?m.done+' / ':''}${m.target} 组</b></li>`).join('')}</ul><p class="small muted">同一组可涉及多个肌群，不能把肌群组数相加当作总训练组数。</p>`;
+  }
+  function selectMuscle(id){if(!Muscles.GROUPS[id]||!bodyData)return;selectedMuscle=id;const views=Muscles.GROUPS[id].views;if(bodySide!=='both'&&!views.includes(bodySide))bodySide=views[0];renderBody();}
+  document.addEventListener('click',event=>{const region=event.target.closest('[data-muscle]');if(region)selectMuscle(region.dataset.muscle);const day=event.target.closest('[data-muscle-date]');if(day){bodyMode='logged';$('body-date').value=day.dataset.muscleDate;showTab('today');renderBody();$('muscle-section').scrollIntoView({block:'start'});}const mode=event.target.closest('[data-body-mode]');if(mode){bodyMode=mode.dataset.bodyMode;renderBody();}const side=event.target.closest('[data-body-side]');if(side){bodySide=side.dataset.bodySide;renderBody();}});
+  $('body-model').addEventListener('keydown',event=>{const region=event.target.closest('[data-muscle]');if(region&&(event.key==='Enter'||event.key===' ')){event.preventDefault();selectMuscle(region.dataset.muscle);}});
+  $('body-date').addEventListener('change',()=>{if(!$('body-date').value||$('body-date').value>T.dateKey(now())){$('body-date').value=T.dateKey(now());}renderBody();});
+  $('body-cta').addEventListener('click',()=>{if(bodyMode==='logged'){showTab('tree');$('timeline').scrollIntoView({block:'start'});}else{if(!draft&&store.state.draft){draft=T.clone(store.state.draft);loadDraft();}showTab('today');$('record-section').scrollIntoView({block:'start'});if(!draft)$('plan-choice').focus({preventScroll:true});}});
   function begin(){
     if(store.state.draft||draft)return tell('请先继续或放弃已有草稿。',true);
     if(!$('workout-form').reportValidity())return;
@@ -69,7 +122,7 @@
       const at=selectedTime();if(Date.parse(at)>Date.now()+300000)throw new Error('不能提前记录未来的训练，请选择已开始的时间。');
       const r=readiness(),result=T.nextPlan(sessions(),at,r),plan=T.plans.find(p=>p.id===$('plan-choice').value);
       const next={id:uid(),date:at,updatedAt:now(),planId:$('plan-choice').value,status:'completed',readiness:r,duration:null,cardioMinutes:null,mobilityMinutes:null,note:'',exercises:plan?plan.exercises.map(e=>T.makeExercise(e,sessions(),at,r,result.adaptation)):[]};
-      store.change(s=>{s.draft=next;});draft=T.clone(next);loadDraft();
+      store.change(s=>{s.draft=next;});draft=T.clone(next);bodyMode='goal';loadDraft();
     }catch(e){tell(e.message,true);}
   }
   function loadDraft(){
@@ -101,14 +154,14 @@
       <div class="fields config">${field('动作质量',`<select data-field="form">${options([['unknown','未评价'],['good','动作稳定'],['poor','不稳定 / 借力']],e.form)}</select>`)}${field('该动作是否疼痛',`<select data-field="pain">${options([['unknown','未评价'],['none','无痛'],['yes','有疼痛']],e.pain)}</select>`)}</div>
       ${field('动作备注',`<input data-field="note" maxlength="500" value="${esc(e.note)}" placeholder="可选：弹响、器械调节位置、左右差异">`)}</section>`;
     }).join(''):`<p class="callout">${draft.planId==='cardio'?'建议 5 分钟热身＋30 分钟舒适有氧＋10 分钟活动度＋5 分钟放松；请记录实际分钟。':draft.planId==='mobility'?'在舒适范围完成活动度练习，记录实际分钟，不强压拉伸。':'今天可以休息、轻松走动，或只记录恢复状态。休息不推进力量课表，也不扣分。'}</p>`;
-    updateHints();
+    updateHints();renderBody();
   }
   function updateHints(){if(!draft)return;draft.exercises.forEach((e,i)=>{const rec=T.recommend(e,sessions(),draft.date,readiness());const hint=$('hint-'+i);if(!hint)return;hint.classList.toggle('caution',['暂停','先评估','减量','减轻难度'].includes(rec.action));hint.innerHTML=`<strong>${esc(e.pain==='yes'?'停止诱发动作':rec.action)}</strong>${esc(e.pain==='yes'?'本次记录了疼痛；不继续加重，必要时寻求评估。':rec.reason)}${rec.weight!==null?' 上次可比负重：'+esc(loadText(e,rec.weight))+'。':''}`;const previous=T.matchingHistory(e,sessions(),draft.date)[0];$('previous-'+i).textContent=previous?'上次 '+T.dateKey(previous.session.date)+'：'+previous.exercise.sets.filter(s=>s.done).map(s=>setText(e,s)).join('；'):'尚无可比记录。先确认器械标识和单位，建立基线。';});}
   $('workout-form').addEventListener('input',event=>{
     const section=event.target.closest('[data-ex]');if(!section||!draft)return;const e=draft.exercises[Number(section.dataset.ex)],el=event.target;
     if(el.dataset.setField){const set=e.sets[Number(el.closest('[data-set]').dataset.set)];set[el.dataset.setField]=el.type==='checkbox'?el.checked:el.value===''?null:Number(el.value);}
     else if(el.dataset.field){const key=el.dataset.field;e[key]=['targetLow','targetHigh'].includes(key)?Number(el.value):el.value;section.querySelector('.target').textContent=`本次 ${e.targetSets} × ${e.targetLow}–${e.targetHigh} ${unit(e)}`;}
-    persistDraft();updateHints();
+    persistDraft();updateHints();if(el.dataset.field==='variant')renderBody();
   });
   $('workout-form').addEventListener('change',event=>{
     const el=event.target,section=el.closest('[data-ex]');if(!section||!draft)return;
@@ -142,7 +195,7 @@
       if(store.state.sessions.some(s=>s.id!==validated.id&&Date.parse(s.date)===Date.parse(validated.date)&&s.planId===validated.planId))throw new Error('同一开始时间已有该课表记录。请编辑已有记录，避免重复累计。');
       const editing=store.state.sessions.some(s=>s.id===validated.id);
       store.change(s=>{const i=s.sessions.findIndex(x=>x.id===validated.id);if(i>=0)s.sessions[i]=validated;else s.sessions.push(validated);s.draft=null;});
-      draft=null;manualPlan=false;renderSetup();renderAll();tell(editing?'训练记录已更新，统计与建议已重新计算。':'训练已保存。下一次建议已按完成情况与恢复状态更新。');showTab('tree');
+      draft=null;manualPlan=false;bodyMode='logged';$('body-date').value=T.dateKey(validated.date);renderSetup();renderAll();tell(editing?'训练记录已更新，肌群能量、统计与建议已重新计算。':'训练已保存，对应肌群能量已入账。');showTab('today');renderBody(true);$('muscle-section').scrollIntoView({block:'start'});
     }catch(e){$('save-error').hidden=false;$('save-error').textContent=e.message;}
   });
   $('cancel-discard').addEventListener('click',()=>$('discard-dialog').close());
@@ -163,7 +216,7 @@
       const title=s.legacy?({legs:'旧记录 · 下肢',hiit:'旧记录 · HIIT'}[s.dayType]||'旧训练记录'):T.names[s.planId];
       let body;
       if(s.legacy)body=`<span class="badge">旧版只读</span><p class="small muted">原始次数与秒数语义不一致，保留明细，不用于新统计或加重建议。</p><details><summary>查看原始记录</summary><ul>${(s.exercises||[]).map(e=>`<li>${esc(e.name)} · ${esc(e.sets)} 组 · 原始数值 ${esc(e.reps)}${e.note?' · '+esc(e.note):''}</li>`).join('')}</ul></details>`;
-      else body=`<span class="badge">${s.status==='completed'?'已完成':'部分完成'}</span>${s.duration!==null?`<span class="badge">馆内 ${s.duration}′</span>`:''}${s.cardioMinutes?`<span class="badge">有氧 ${s.cardioMinutes}′</span>`:''}${s.mobilityMinutes?`<span class="badge">活动度 ${s.mobilityMinutes}′</span>`:''}<p class="small muted">睡眠 ${s.readiness.sleep??'—'} 小时 · 精神 ${s.readiness.energy??'—'}/5 · ${s.readiness.pain==='yes'?'记录了疼痛':s.readiness.pain==='none'?'无痛':'疼痛未评价'}</p>${s.note?`<p class="small">${esc(s.note)}</p>`:''}<details><summary>逐组记录与实际反馈</summary>${s.exercises.map(e=>`<p><b>${esc(e.variant)}</b> · ${esc(e.equipment)}<br>${e.sets.filter(x=>x.done).map(x=>esc(setText(e,x))).join('<br>')||'未完成正式组'}<br>动作：${{good:'稳定',poor:'不稳定',unknown:'未评价'}[e.form]}；疼痛：${{none:'无',yes:'有',unknown:'未评价'}[e.pain]}${e.note?'<br>'+esc(e.note):''}</p>`).join('')||'<p>本次没有力量组记录。</p>'}</details><div class="buttons"><button type="button" data-edit="${esc(s.id)}">编辑</button><button type="button" data-archive="${esc(s.id)}">移至可恢复区</button></div>`;
+      else body=`<span class="badge">${s.status==='completed'?'已完成':'部分完成'}</span>${s.duration!==null?`<span class="badge">馆内 ${s.duration}′</span>`:''}${s.cardioMinutes?`<span class="badge">有氧 ${s.cardioMinutes}′</span>`:''}${s.mobilityMinutes?`<span class="badge">活动度 ${s.mobilityMinutes}′</span>`:''}<p class="small muted">睡眠 ${s.readiness.sleep??'—'} 小时 · 精神 ${s.readiness.energy??'—'}/5 · ${s.readiness.pain==='yes'?'记录了疼痛':s.readiness.pain==='none'?'无痛':'疼痛未评价'}</p>${s.note?`<p class="small">${esc(s.note)}</p>`:''}<details><summary>逐组记录与实际反馈</summary>${s.exercises.map(e=>`<p><b>${esc(e.variant)}</b> · ${esc(e.equipment)}<br>${e.sets.filter(x=>x.done).map(x=>esc(setText(e,x))).join('<br>')||'未完成正式组'}<br>动作：${{good:'稳定',poor:'不稳定',unknown:'未评价'}[e.form]}；疼痛：${{none:'无',yes:'有',unknown:'未评价'}[e.pain]}${e.note?'<br>'+esc(e.note):''}</p>`).join('')||'<p>本次没有力量组记录。</p>'}</details><div class="buttons"><button type="button" data-muscle-date="${esc(T.dateKey(s.date))}">查看当天肌群</button><button type="button" data-edit="${esc(s.id)}">编辑</button><button type="button" data-archive="${esc(s.id)}">移至可恢复区</button></div>`;
       html+=node(`<p class="node-date">${esc(T.dateKey(s.date))} · ${new Intl.DateTimeFormat('en-GB',{timeZone:T.ZONE,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(s.date))}</p><h3>${esc(title)}</h3>${body}`);
     }
     $('timeline').innerHTML=`<ol class="tree">${html}</ol><div class="root"><b>↟</b>起点 · 从真实记录开始<p>${esc(legacyMessage)}</p></div>`;
