@@ -1,16 +1,15 @@
 (function () {
   'use strict';
-  const T=window.Training, $=id=>document.getElementById(id);
-  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const T=window.Training, L=window.SessionLogging, C=window.Charts, $=id=>document.getElementById(id);
+  const esc=L.escapeHtml;
   const uid=()=>globalThis.crypto?.randomUUID?.()||'s-'+Date.now()+'-'+Math.random().toString(36).slice(2);
   const now=()=>new Date().toISOString();
   const num=id=>$(id).value===''?null:Number($(id).value);
   const options=(entries,current)=>entries.map(([v,label])=>`<option value="${esc(v)}"${String(v)===String(current)?' selected':''}>${esc(label)}</option>`).join('');
   const field=(label,html,wide=false)=>`<label${wide?' class="wide"':''}>${label}${html}</label>`;
   const empty=message=>`<div class="empty">${esc(message)}</div>`;
-  const unit=e=>e.metric==='seconds'?'秒':'次';
-  const loadText=(e,load)=>['body','band'].includes(e.loadUnit)?(e.loadUnit==='body'?'徒手':'弹力带'):load+' kg'+(e.loadUnit==='per-hand'?' / 单只':e.loadUnit==='assistance'?' / 辅助':'');
-  const setText=(e,s)=>`${loadText(e,s.load)} × ${s.value} ${unit(e)}${s.rir!==null?' · RIR '+s.rir:''}`;
+  const unit=L.metricUnit;
+  const setText=L.setText;
   let draft=null, legacy=[], legacyMessage='正在读取旧记录…', manualPlan=false, deadline=null, tab='today', groups=[];
   let lastExport=null;
   const storage={getItem:key=>window.localStorage.getItem(key),setItem:(key,value)=>window.localStorage.setItem(key,value)};
@@ -34,7 +33,7 @@
       ${field('肌肉酸痛',`<select id="soreness">${options([['','未记录'],[0,'无明显酸痛'],[1,'轻微'],[2,'较明显'],[3,'很明显']],'')}</select>`)}
       ${field('是否有疼痛',`<select id="readiness-pain">${options([['unknown','未记录'],['none','无痛'],['yes','有疼痛']],'unknown')}</select>`)}
       </div></fieldset><div id="readiness-note" class="callout" aria-live="polite"></div>
-      <div class="buttons"><button type="button" class="primary" id="begin">生成本次记录 ↗</button><button type="button" id="resume" hidden>继续草稿</button><button type="button" id="discard" hidden>放弃草稿</button></div>
+      <div id="draft-banner" class="callout" hidden></div><div class="buttons"><button type="button" class="primary" id="resume" hidden>继续未完成的草稿</button><button type="button" class="primary" id="begin">生成本次记录 ↗</button><button type="button" id="discard" hidden>放弃草稿</button></div>
       <div id="editor" hidden><p class="callout">只勾选实际完成的组。重量与次数 / 秒数分开；RIR 表示这一组结束时还能标准完成几次。热身不计正式组数。空白不等于完成。</p><div id="exercise-editor"></div>
       <fieldset><legend>本次实际完成</legend><div class="fields">
       ${field('馆内训练（分钟）','<input id="duration" type="number" min="0" max="300" step="1" placeholder="不含通勤">')}
@@ -52,14 +51,26 @@
     for(const id of ['duration','cardio-minutes','mobility-minutes','completion','session-note'])$(id).addEventListener('input',()=>{captureExtras();persistDraft();});
     draftButtons();updatePlan();
   }
-  function draftButtons(){const exists=!!(draft||store.state.draft);$('resume').hidden=!exists||!!draft;$('discard').hidden=!exists;$('begin').disabled=exists||!!store.error;$('plan-choice').disabled=!!draft;$('session-date').disabled=!!draft;$('session-time').disabled=!!draft;$('draft-state').textContent=draft?'草稿已恢复':exists?'有未完成草稿':'尚未开始';}
+  function draftButtons(){
+    const stored=store.state.draft,pending=!!stored&&!draft,exists=!!(draft||stored);
+    $('resume').hidden=!pending;$('discard').hidden=!exists;$('begin').disabled=exists||!!store.error;
+    $('plan-choice').disabled=!!draft||pending;$('session-date').disabled=!!draft||pending;$('session-time').disabled=!!draft||pending;
+    for(const id of ['sleep','energy','soreness','readiness-pain'])$(id).disabled=pending;
+    $('draft-banner').hidden=!pending;
+    if(pending){
+      $('session-date').value=T.dateKey(stored.date);$('session-time').value=L.formatZoneTime(stored.date,T.ZONE);$('plan-choice').value=stored.planId;
+      for(const key of ['sleep','energy','soreness'])$(key).value=stored.readiness?.[key]??'';$('readiness-pain').value=stored.readiness?.pain||'unknown';
+      $('draft-banner').textContent=`有一份未完成草稿（${T.names[stored.planId]||'训练'} · ${T.dateKey(stored.date)} ${L.formatZoneTime(stored.date,T.ZONE)}）。点「继续未完成的草稿」恢复已填的组；在此之前改表单不会写入这份草稿，草稿也不算已完成训练。`;
+    }
+    $('draft-state').textContent=draft?'正在记录草稿':pending?'有未完成草稿':'尚未开始';
+  }
   function updatePlan(){
     let at;try{at=selectedTime();}catch{return;}
     // The next-step card must include today's already-saved workout, even when
     // the default start time is identical to that workout's timestamp.
     const planningAt=!draft&&T.dateKey(at)===T.dateKey(now())?new Date(Math.max(Date.parse(at),Date.now())).toISOString():at;
     const result=T.nextPlan(sessions(),planningAt,readiness());
-    if(!draft&&!manualPlan)$('plan-choice').value=result.mode==='normal'?result.plan.id:'recovery';
+    if(!draft&&!manualPlan&&!store.state.draft)$('plan-choice').value=result.mode==='normal'?result.plan.id:'recovery';
     const chosen=T.plans.find(p=>p.id===$('plan-choice').value);
     const preview=chosen?`<details open><summary>本次课表预览 · ${esc(chosen.name)}</summary><ul class="small muted">${chosen.exercises.map(def=>{const e=T.makeExercise(def,sessions(),at,readiness(),result.adaptation);return `<li>${esc(e.variant)} · ${e.targetSets} × ${e.targetLow}–${e.targetHigh} ${unit(e)}</li>`;}).join('')}</ul></details>`:'<p class="small">本次选择：'+esc(T.names[$('plan-choice').value])+'。记录实际完成分钟与恢复感受即可。</p>';
     $('next-plan').innerHTML=`<h2>${esc(result.mode==='normal'?result.plan.name:result.mode==='stop'?'先关注疼痛':result.mode==='rest'?'今天先恢复':'轻量一点，也可以')}</h2><p>${esc(result.reason)}</p><p class="small">${result.adaptation?'适应阶段 · 前 8 次力量训练':'常规阶段'} · ${esc(result.plan.focus)}</p>${preview}`;
@@ -129,7 +140,7 @@
   }
   function loadDraft(){
     const d=draft;if(!d)return;
-    $('session-date').value=T.dateKey(d.date);$('session-time').value=new Intl.DateTimeFormat('en-GB',{timeZone:T.ZONE,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(d.date));$('plan-choice').value=d.planId;
+    $('session-date').value=T.dateKey(d.date);$('session-time').value=L.formatZoneTime(d.date,T.ZONE);$('plan-choice').value=d.planId;
     for(const key of ['sleep','energy','soreness'])$(key).value=d.readiness[key]??'';$('readiness-pain').value=d.readiness.pain;
     for(const [id,key] of [['duration','duration'],['cardio-minutes','cardioMinutes'],['mobility-minutes','mobilityMinutes'],['completion','status'],['session-note','note']])$(id).value=d[key]??'';
     $('editor').hidden=false;$('save-error').hidden=true;renderExercises();draftButtons();updatePlan();
@@ -151,42 +162,48 @@
       ${field('每组目标上限',`<input data-field="targetHigh" type="number" min="1" max="600" value="${e.targetHigh}">`)}
       </div><p class="small muted">换动作或单位后请核实目标。单侧动作完成两侧算一组。器械重量只与同一台机器比较。</p></details>
       <div class="suggestion" id="hint-${i}" aria-live="polite"></div><p class="small muted" id="previous-${i}"></p>
-      <table class="set-table"><thead><tr><th scope="col">组</th><th scope="col">额外负重 kg</th><th scope="col">${unit(e)}</th><th scope="col">RIR</th><th scope="col">完成</th></tr></thead><tbody>${e.sets.map((s,j)=>`<tr data-set="${j}"><td>${j+1}</td><td><input data-set-field="load" type="number" min="0" max="1000" step="any" value="${s.load??''}" ${['body','band'].includes(e.loadUnit)?'readonly':''} aria-label="${esc(e.name)}第${j+1}组重量"></td><td><input data-set-field="value" type="number" min="1" max="3600" step="1" value="${s.value??''}" placeholder="${e.targetLow}–${e.targetHigh}" aria-label="${esc(e.name)}第${j+1}组${unit(e)}"></td><td><select data-set-field="rir" aria-label="${esc(e.name)}第${j+1}组余力">${options([['','未知'],...Array.from({length:11},(_,v)=>[v,v===10?'10+':String(v)])],s.rir??'')}</select></td><td><input data-set-field="done" type="checkbox" ${s.done?'checked':''} aria-label="${esc(e.name)}第${j+1}组已完成"></td></tr>`).join('')}</tbody></table>
+      <div class="set-list">${e.sets.map((s,j)=>{const previous=T.matchingHistory(e,sessions(),draft.date)[0];const label=L.lastSetLabel(previous,j);const locked=['body','band'].includes(e.loadUnit);const step=(field,delta,label)=>`<button type="button" data-step="${field}" data-delta="${delta}" aria-label="${esc(e.name+'第'+(j+1)+'组'+label)}"${field==='load'&&locked?' disabled':''}>${delta<0?'－':'＋'}</button>`;return `<article class="set-row" data-set="${j}"><header><b>第 ${j+1} 组</b>${label?`<small class="last-set">${esc(label)}</small>`:'<small class="last-set"></small>'}<label class="set-done"><input data-set-field="done" type="checkbox" ${s.done?'checked':''} aria-label="${esc(e.name)}第${j+1}组已完成">完成</label></header><div class="set-fields"><div class="set-field"><span>额外负重 kg</span><span class="stepper">${step('load',-1,'减少重量')}<input data-set-field="load" type="number" inputmode="decimal" min="0" max="1000" step="any" value="${s.load??''}" ${locked?'readonly':''} aria-label="${esc(e.name)}第${j+1}组重量">${step('load',1,'增加重量')}</span></div><div class="set-field"><span>${unit(e)}</span><span class="stepper">${step('value',-1,'减少'+unit(e))}<input data-set-field="value" type="number" inputmode="numeric" min="1" max="3600" step="1" value="${s.value??''}" placeholder="${e.targetLow}–${e.targetHigh}" aria-label="${esc(e.name)}第${j+1}组${unit(e)}">${step('value',1,'增加'+unit(e))}</span></div><label class="set-field">RIR<select data-set-field="rir" aria-label="${esc(e.name)}第${j+1}组余力">${options([['','未知'],...Array.from({length:11},(_,v)=>[v,v===10?'10+':String(v)])],s.rir??'')}</select></label></div></article>`;}).join('')}</div>
       <div class="buttons"><button type="button" data-copy-load>沿用上次重量</button><button type="button" data-adjust="-1">减一组</button><button type="button" data-adjust="1">加一组</button></div>
       <div class="fields config">${field('动作质量',`<select data-field="form">${options([['unknown','未评价'],['good','动作稳定'],['poor','不稳定 / 借力']],e.form)}</select>`)}${field('该动作是否疼痛',`<select data-field="pain">${options([['unknown','未评价'],['none','无痛'],['yes','有疼痛']],e.pain)}</select>`)}</div>
       ${field('动作备注',`<input data-field="note" maxlength="500" value="${esc(e.note)}" placeholder="可选：弹响、器械调节位置、左右差异">`)}</section>`;
     }).join(''):`<p class="callout">${draft.planId==='cardio'?'建议 5 分钟热身＋30 分钟舒适有氧＋10 分钟活动度＋5 分钟放松；请记录实际分钟。':draft.planId==='mobility'?'在舒适范围完成活动度练习，记录实际分钟，不强压拉伸。':'今天可以休息、轻松走动，或只记录恢复状态。休息不推进力量课表，也不扣分。'}</p>`;
     updateHints();renderBody();
   }
-  function updateHints(){if(!draft)return;draft.exercises.forEach((e,i)=>{const rec=T.recommend(e,sessions(),draft.date,readiness());const hint=$('hint-'+i);if(!hint)return;hint.classList.toggle('caution',['暂停','先评估','减量','减轻难度'].includes(rec.action));hint.innerHTML=`<strong>${esc(e.pain==='yes'?'停止诱发动作':rec.action)}</strong>${esc(e.pain==='yes'?'本次记录了疼痛；不继续加重，必要时寻求评估。':rec.reason)}${rec.weight!==null?' 上次可比负重：'+esc(loadText(e,rec.weight))+'。':''}`;const previous=T.matchingHistory(e,sessions(),draft.date)[0];$('previous-'+i).textContent=previous?'上次 '+T.dateKey(previous.session.date)+'：'+previous.exercise.sets.filter(s=>s.done).map(s=>setText(e,s)).join('；'):'尚无可比记录。先确认器械标识和单位，建立基线。';});}
+  function updateHints(){if(!draft)return;draft.exercises.forEach((e,i)=>{const rec=T.recommend(e,sessions(),draft.date,readiness());const hint=$('hint-'+i);if(!hint)return;hint.classList.toggle('caution',['暂停','先评估','减量','减轻难度'].includes(rec.action));hint.innerHTML=`<strong>${esc(e.pain==='yes'?'停止诱发动作':rec.action)}</strong>${esc(e.pain==='yes'?'本次记录了疼痛；不继续加重，必要时寻求评估。':rec.reason)}${rec.weight!==null?' 上次可比负重：'+esc(L.loadText(e,rec.weight))+'。':''}`;const previous=T.matchingHistory(e,sessions(),draft.date)[0];$('previous-'+i).textContent=L.describePrevious(e,previous,previous?T.dateKey(previous.session.date):'');});}
   $('workout-form').addEventListener('input',event=>{
     const section=event.target.closest('[data-ex]');if(!section||!draft)return;const e=draft.exercises[Number(section.dataset.ex)],el=event.target;
     if(el.dataset.setField){const set=e.sets[Number(el.closest('[data-set]').dataset.set)];set[el.dataset.setField]=el.type==='checkbox'?el.checked:el.value===''?null:Number(el.value);}
-    else if(el.dataset.field){const key=el.dataset.field;e[key]=['targetLow','targetHigh'].includes(key)?Number(el.value):el.value;section.querySelector('.target').textContent=`本次 ${e.targetSets} × ${e.targetLow}–${e.targetHigh} ${unit(e)}`;}
+    else if(el.dataset.field){const key=el.dataset.field;e[key]=['targetLow','targetHigh'].includes(key)?Number(el.value):el.value;section.querySelector('.target').textContent=`本次 ${e.targetSets} × ${e.targetLow}–${e.targetHigh} ${unit(e)}`;if(['variant','loadUnit','metric'].includes(key))return;}
+    else return;
     persistDraft();updateHints();if(el.dataset.field==='variant')renderBody();
   });
   $('workout-form').addEventListener('change',event=>{
     const el=event.target,section=el.closest('[data-ex]');if(!section||!draft)return;
     const e=draft.exercises[Number(section.dataset.ex)],key=el.dataset.field;
     if(['variant','loadUnit','metric'].includes(key)){
+      e[key]=el.value;
       if(e.sets.some(s=>s.done))tell('已完成组请核实实际动作和单位，修改后不会与旧器械混算。');
       if(key==='variant'){
-        const name=e.variant;
-        if(/侧平板/.test(name)){e.metric='seconds';e.targetLow=15;e.targetHigh=25;e.loadUnit='body';}
-        else if(/臀桥|鸟狗|扶稳分腿蹲|滑垫|徒手/.test(name)){e.metric='reps';e.loadUnit='body';}
-        else if(/辅助引体/.test(name)){e.metric='reps';e.loadUnit='assistance';}
-        else if(/哑铃/.test(name)){e.metric='reps';e.loadUnit='per-hand';}
-        else {e.metric='reps';e.loadUnit='machine';}
-        e.equipment=['body','band'].includes(e.loadUnit)?'垫上 / 徒手':'';
-      }
-      e.sets.forEach(s=>{s.load=['body','band'].includes(e.loadUnit)?0:null;s.value=null;s.rir=null;s.done=false;});
+        const def=T.plans.find(p=>p.id===draft.planId)?.exercises.find(x=>x.id===e.id);
+        if(def)T.applyVariantChoice(e,def);
+        else e.sets.forEach(s=>{s.load=['body','band'].includes(e.loadUnit)?0:null;s.value=null;s.rir=null;s.done=false;});
+      }else e.sets.forEach(s=>{s.load=['body','band'].includes(e.loadUnit)?0:null;s.value=null;s.rir=null;s.done=false;});
       tell('动作或单位已变更，已清空该动作的实际组记录，避免把旧数值当成新单位。请重新填写。');
       persistDraft();renderExercises();
     }
   });
   $('workout-form').addEventListener('click',event=>{
+    const stepBtn=event.target.closest('[data-step]');
+    if(stepBtn&&draft&&!stepBtn.disabled){
+      event.preventDefault();
+      const e=draft.exercises[Number(stepBtn.closest('[data-ex]').dataset.ex)];
+      const set=e.sets[Number(stepBtn.closest('[data-set]').dataset.set)];
+      const field=stepBtn.dataset.step,next=L.stepSetField(set,field,Number(stepBtn.dataset.delta),e);
+      if(next!==set[field]){set[field]=next;const input=stepBtn.parentElement.querySelector(`[data-set-field="${field}"]`);if(input)input.value=next??'';persistDraft();updateHints();}
+      return;
+    }
     const copy=event.target.closest('[data-copy-load]');
-    if(copy&&draft){const e=draft.exercises[Number(copy.closest('[data-ex]').dataset.ex)],previous=T.matchingHistory(e,sessions(),draft.date)[0];if(!previous)return tell('没有同器械、同单位的可比记录，请先建立基线。');if(previous.exercise.pain==='yes'||previous.exercise.form==='poor')return tell('上次记录有疼痛或动作不稳定，不沿用重量；先确认安全负荷。',true);const sets=previous.exercise.sets.filter(s=>s.done);if(!sets.length)return tell('上次没有完成组，不能复制重量。');e.sets.forEach((s,i)=>{if(!s.done)s.load=sets[Math.min(i,sets.length-1)].load;});persistDraft();renderExercises();tell('只填入上次重量，次数和完成状态仍需如实记录。');return;}
+    if(copy&&draft){const e=draft.exercises[Number(copy.closest('[data-ex]').dataset.ex)],result=L.copyPreviousLoads(e,T.matchingHistory(e,sessions(),draft.date)[0]);if(!result.ok)return tell(result.message,!!result.error);persistDraft();renderExercises();tell(result.message);return;}
     const b=event.target.closest('[data-adjust]');if(!b||!draft)return;const e=draft.exercises[Number(b.closest('[data-ex]').dataset.ex)],delta=Number(b.dataset.adjust);if(e.sets.length+delta<1||e.sets.length+delta>8)return;if(delta<0){if(e.sets.at(-1).done)return tell('最后一组已完成，请先取消勾选再调整。',true);e.sets.pop();}else e.sets.push({load:['body','band'].includes(e.loadUnit)?0:null,value:null,rir:null,done:false});e.targetSets=e.sets.length;persistDraft();renderExercises();
   });
   $('workout-form').addEventListener('submit',event=>{
@@ -219,48 +236,32 @@
       let body;
       if(s.legacy)body=`<span class="badge">旧版只读</span><p class="small muted">原始次数与秒数语义不一致，保留明细，不用于新统计或加重建议。</p><details><summary>查看原始记录</summary><ul>${(s.exercises||[]).map(e=>`<li>${esc(e.name)} · ${esc(e.sets)} 组 · 原始数值 ${esc(e.reps)}${e.note?' · '+esc(e.note):''}</li>`).join('')}</ul></details>`;
       else body=`<span class="badge">${s.status==='completed'?'已完成':'部分完成'}</span>${s.duration!==null?`<span class="badge">馆内 ${s.duration}′</span>`:''}${s.cardioMinutes?`<span class="badge">有氧 ${s.cardioMinutes}′</span>`:''}${s.mobilityMinutes?`<span class="badge">活动度 ${s.mobilityMinutes}′</span>`:''}<p class="small muted">睡眠 ${s.readiness.sleep??'—'} 小时 · 精神 ${s.readiness.energy??'—'}/5 · ${s.readiness.pain==='yes'?'记录了疼痛':s.readiness.pain==='none'?'无痛':'疼痛未评价'}</p>${s.note?`<p class="small">${esc(s.note)}</p>`:''}<details><summary>逐组记录与实际反馈</summary>${s.exercises.map(e=>`<p><b>${esc(e.variant)}</b> · ${esc(e.equipment)}<br>${e.sets.filter(x=>x.done).map(x=>esc(setText(e,x))).join('<br>')||'未完成正式组'}<br>动作：${{good:'稳定',poor:'不稳定',unknown:'未评价'}[e.form]}；疼痛：${{none:'无',yes:'有',unknown:'未评价'}[e.pain]}${e.note?'<br>'+esc(e.note):''}</p>`).join('')||'<p>本次没有力量组记录。</p>'}</details><div class="buttons"><button type="button" data-muscle-date="${esc(T.dateKey(s.date))}">查看当天肌群</button><button type="button" data-edit="${esc(s.id)}">编辑</button><button type="button" data-archive="${esc(s.id)}">移至可恢复区</button></div>`;
-      html+=node(`<p class="node-date">${esc(T.dateKey(s.date))} · ${new Intl.DateTimeFormat('en-GB',{timeZone:T.ZONE,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(s.date))}</p><h3>${esc(title)}</h3>${body}`);
+      html+=node(`<p class="node-date">${esc(T.dateKey(s.date))} · ${esc(L.formatZoneTime(s.date,T.ZONE))}</p><h3>${esc(title)}</h3>${body}`);
     }
     $('timeline').innerHTML=`<ol class="tree">${html}</ol><div class="root"><b>↟</b>起点 · 从真实记录开始<p>${esc(legacyMessage)}</p></div>`;
     $('trash-list').innerHTML='<h3>可恢复记录</h3>'+(store.state.trash.length?store.state.trash.map(s=>`<div class="measure-row"><span>${esc(T.dateKey(s.date))} · ${esc(T.names[s.planId])}</span><button type="button" data-restore="${esc(s.id)}">恢复记录</button></div>`).join(''):'<p class="small muted">没有已移出的记录。</p>');
   }
-  function table(headers,rows){return `<table class="data"><thead><tr>${headers.map(h=>`<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;}
-  function barChart(labels,series,caption){
-    const width=620,height=230,left=36,bottom=188,plot=150,step=(width-left-15)/labels.length,max=Math.max(1,...series.flatMap(s=>s.values));
-    let svg=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(caption)}"><line x1="${left}" x2="610" y1="${bottom}" y2="${bottom}" stroke="#52694f"/>`;
-    for(let i=0;i<3;i++){const value=max*i/2,y=bottom-plot*i/2;svg+=`<text x="27" y="${y+4}" text-anchor="end">${Number(value.toFixed(1))}</text>`;}
-    labels.forEach((label,i)=>{const base=left+i*step+step*.12;series.forEach((s,j)=>{const bw=step*.7/series.length,v=s.values[i],h=v/max*plot;svg+=`<rect x="${base+j*bw}" y="${bottom-h}" width="${bw-3}" height="${h}" fill="${s.color}" rx="3"><title>${esc(label+' '+s.name+': '+v)}</title></rect>`;});svg+=`<text x="${left+(i+.5)*step}" y="211" text-anchor="middle">${esc(label)}</text>`;});
-    return svg+'</svg><p class="legend">'+series.map(s=>`<span style="color:${s.color}">● ${esc(s.name)}</span>`).join('　')+'</p><details><summary>查看图表数据</summary><div class="table-scroll">'+table(['日期',...series.map(s=>s.name)],labels.map((l,i)=>[l,...series.map(s=>s.values[i])]))+'</div></details>';
-  }
-  function lineChart(points,caption,color='#c7e6ad'){
-    if(!points.length)return empty('还没有可绘制的记录。');
-    const w=620,h=235,l=45,r=590,b=185,top=25,max=Math.max(...points.map(p=>p.value)),min=Math.min(...points.map(p=>p.value));
-    const padding=Math.max((max-min)*.15,max*.01,1),lo=Math.max(0,min-padding),hi=max+padding;
-    const xy=points.map((p,i)=>({x:points.length===1?(l+r)/2:l+i*(r-l)/(points.length-1),y:b-(p.value-lo)/(hi-lo)*(b-top),p}));
-    let svg=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(caption)}"><text x="2" y="${top+4}">${hi.toFixed(1)}</text><text x="2" y="${b}">${lo.toFixed(1)}</text><line x1="${l}" x2="${r}" y1="${b}" y2="${b}" stroke="#52694f"/><polyline fill="none" stroke="${color}" stroke-width="2" points="${xy.map(p=>p.x+','+p.y).join(' ')}"/>`;
-    xy.forEach(({x,y,p},i)=>{svg+=`<circle cx="${x}" cy="${y}" r="4" fill="${color}"><title>${esc(p.date+': '+p.value.toFixed(1))}</title></circle>`;if(i===0||i===xy.length-1||xy.length<=6)svg+=`<text x="${x}" y="211" text-anchor="middle">${esc(p.date.slice(5))}</text><text class="value" x="${x}" y="${y-11}" text-anchor="middle">${Number(p.value.toFixed(1))}</text>`;});return svg+'</svg>';
-  }
   function renderStats(){
-    const weeks=T.weekly(store.state.sessions,now());$('frequency-chart').innerHTML=barChart(weeks.map(w=>w.label),[{name:'完成场次',values:weeks.map(w=>w.strength),color:'#c7e6ad'}],'每周力量训练完成场次')+`<p class="small muted">本周实际正式组数：${weeks.at(-1).sets}。旧版数据不混入新统计。</p>`;
-    $('minutes-chart').innerHTML=barChart(weeks.map(w=>w.label),[{name:'有氧分钟',values:weeks.map(w=>w.cardio),color:'#a0cadd'},{name:'活动度分钟',values:weeks.map(w=>w.mobility),color:'#e2c58f'}],'每周有氧与活动度分钟');
+    const weeks=T.weekly(store.state.sessions,now());$('frequency-chart').innerHTML=C.barChart(weeks.map(w=>w.label),[{name:'完成场次',values:weeks.map(w=>w.strength),color:'#c7e6ad'}],'每周力量训练完成场次')+`<p class="small muted">本周实际正式组数：${weeks.at(-1).sets}。旧版数据不混入新统计。</p>`;
+    $('minutes-chart').innerHTML=C.barChart(weeks.map(w=>w.label),[{name:'有氧分钟',values:weeks.map(w=>w.cardio),color:'#a0cadd'},{name:'活动度分钟',values:weeks.map(w=>w.mobility),color:'#e2c58f'}],'每周有氧与活动度分钟');
     const previousKey=groups[Number($('exercise-choice').value)]?.key,map=new Map();
     for(const s of store.state.sessions.filter(s=>Date.parse(s.date)<=Date.now()).sort((a,b)=>new Date(a.date)-new Date(b.date)))for(const e of s.exercises){if(!e.sets.some(x=>x.done))continue;const key=T.identity(e);if(!map.has(key))map.set(key,{key,e,items:[]});map.get(key).items.push({s,e});}
     groups=[...map.values()];const selected=Math.max(0,groups.findIndex(g=>g.key===previousKey));$('exercise-choice').innerHTML=groups.length?options(groups.map((g,i)=>[String(i),g.e.variant+' · '+g.e.equipment+' · '+T.units[g.e.loadUnit]+' · '+unit(g.e)]),String(selected)):'<option value="">尚无动作记录</option>';
     if(groups.length&&!$('exercise-choice').value)$('exercise-choice').value='0';renderExerciseChart();renderMeasurements();
   }
-  function renderExerciseChart(){const group=groups[Number($('exercise-choice').value)];if(!group){$('exercise-chart').innerHTML=empty('完成并保存逐组训练后，这里会显示同器械的进步。');$('exercise-table').innerHTML='';return;}const items=group.items.slice(-20),body=['body','band'].includes(group.e.loadUnit);const points=items.map(({s,e})=>({date:T.dateKey(s.date),value:Math.max(...e.sets.filter(x=>x.done).map(x=>body?x.value:x.load))}));$('exercise-chart').innerHTML=lineChart(points,body?'每次最大次数或秒数':'每次最大实际负重')+`<p class="small muted">最近 ${items.length} 次 · ${body?unit(group.e):esc(T.units[group.e.loadUnit])}${group.e.loadUnit==='assistance'?'；辅助重量越少通常越难，不按重量上升判断进步。':''}</p>`;$('exercise-table').innerHTML=table(['日期','完成组','逐组实际','状态'],items.map(({s,e})=>[T.dateKey(s.date),e.sets.filter(x=>x.done).length,e.sets.filter(x=>x.done).map(x=>setText(e,x)).join('；'),s.status==='completed'?'完成':'部分完成']));}
+  function renderExerciseChart(){const group=groups[Number($('exercise-choice').value)];if(!group){$('exercise-chart').innerHTML=empty('完成并保存逐组训练后，这里会显示同器械的进步。');$('exercise-table').innerHTML='';return;}const items=group.items.slice(-20),body=['body','band'].includes(group.e.loadUnit);const points=items.map(({s,e})=>({date:T.dateKey(s.date),value:Math.max(...e.sets.filter(x=>x.done).map(x=>body?x.value:x.load))}));$('exercise-chart').innerHTML=C.lineChart(points,body?'每次最大次数或秒数':'每次最大实际负重')+`<p class="small muted">最近 ${items.length} 次 · ${body?unit(group.e):esc(T.units[group.e.loadUnit])}${group.e.loadUnit==='assistance'?'；辅助重量越少通常越难，不按重量上升判断进步。':''}</p>`;$('exercise-table').innerHTML=C.table(['日期','完成组','逐组实际','状态'],items.map(({s,e})=>[T.dateKey(s.date),e.sets.filter(x=>x.done).length,e.sets.filter(x=>x.done).map(x=>setText(e,x)).join('；'),s.status==='completed'?'完成':'部分完成']));}
   function renderMeasurements(){
     const all=store.state.measurements.filter(m=>T.dateKey(m.date)<=T.dateKey(now())).sort((a,b)=>new Date(a.date)-new Date(b.date));
     const weighted=all.filter(m=>m.weight!==null),daily=new Map();for(const m of weighted)daily.set(T.dateKey(m.date),m);
     const days=[...daily.values()];const points=days.slice(-30).map(m=>{const date=T.dateKey(m.date),window=days.filter(x=>{const diff=T.daysBetween(T.dateKey(x.date),date);return diff>=0&&diff<7;});return {date,value:window.reduce((a,x)=>a+x.weight,0)/window.length};});
     const waist=all.filter(m=>m.waist!==null).slice(-30).map(m=>({date:T.dateKey(m.date),value:m.waist}));
-    $('body-chart').innerHTML='<h3>体重 · 7 天记录均值 kg</h3>'+lineChart(points,'体重7天记录均值')+'<h3>腰围 cm</h3>'+lineChart(waist,'腰围厘米','#e2c58f');
+    $('body-chart').innerHTML='<h3>体重 · 7 天记录均值 kg</h3>'+C.lineChart(points,'体重7天记录均值')+'<h3>腰围 cm</h3>'+C.lineChart(waist,'腰围厘米','#e2c58f');
     $('measurement-list').innerHTML=all.slice(-10).reverse().map(m=>`<div class="measure-row"><span>${esc(T.dateKey(m.date))}</span><span>${m.weight??'—'} kg</span><span>${m.waist??'—'} cm</span><button type="button" data-measure="${esc(m.id)}">编辑</button></div>`).join('');
   }
   function renderAll(){renderSummary();renderTree();renderStats();updatePlan();}
   $('measurement-form').addEventListener('submit',event=>{event.preventDefault();try{const date=$('measure-date').value;if(date>T.dateKey(now()))throw new Error('不能记录未来测量');const existing=store.state.measurements.find(m=>T.dateKey(m.date)===date);const m=T.validateMeasurement({id:existing?.id||uid(),date:date+'T06:00:00+08:00',weight:num('measure-weight'),waist:num('measure-waist')});if(!mutate(s=>{const i=s.measurements.findIndex(x=>x.id===m.id);if(i>=0)s.measurements[i]=m;else s.measurements.push(m);} ))return;renderMeasurements();renderSummary();tell('测量已保存，同一天的测量会更新而不重复累计。');}catch(e){tell(e.message,true);}});
   document.addEventListener('click',event=>{const b=event.target.closest('button');if(!b)return;if(b.dataset.tab)showTab(b.dataset.tab);if(b.hasAttribute('data-go-today')){showTab('today');$('record-section').scrollIntoView({block:'start'});}if(b.dataset.edit)editSession(b.dataset.edit);if(b.dataset.archive)archive(b.dataset.archive);if(b.dataset.restore)restore(b.dataset.restore);if(b.dataset.measure){const m=store.state.measurements.find(x=>x.id===b.dataset.measure);$('measure-date').value=T.dateKey(m.date);$('measure-weight').value=m.weight??'';$('measure-waist').value=m.waist??'';$('measure-weight').focus();}if(b.dataset.timer){deadline=Date.now()+Number(b.dataset.timer)*1000;renderTimer();}});
-  function renderTimer(){const seconds=deadline?Math.max(0,Math.ceil((deadline-Date.now())/1000)):0;$('timer').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');if(deadline&&seconds===0){deadline=null;tell('休息计时结束。确认呼吸与动作准备好后，再开始下一组。');}}
+  function renderTimer(){const seconds=deadline?Math.max(0,Math.ceil((deadline-Date.now())/1000)):0;$('timer').textContent=L.formatClock(seconds);if(deadline&&seconds===0){deadline=null;tell('休息计时结束。确认呼吸与动作准备好后，再开始下一组。');}}
   $('stop-timer').addEventListener('click',()=>{deadline=null;renderTimer();});setInterval(renderTimer,500);
   $('tree-filter').addEventListener('change',renderTree);$('exercise-choice').addEventListener('change',renderExerciseChart);$('toggle-trash').addEventListener('click',()=>{$('trash-list').hidden=!$('trash-list').hidden;});
   $('import-trigger').addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();$('import').click();}});
@@ -270,6 +271,6 @@
   window.addEventListener('storage',event=>{if(event.key===JournalStore.KEY)storageError(new Error('另一页面更新了本机记录。请先导出本页草稿，再刷新；不要同时在多个页面编辑。'));});
   window.addEventListener('beforeunload',event=>{if(draft){captureExtras();if(!persistDraft()){event.preventDefault();event.returnValue='';}}});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&draft){captureExtras();persistDraft();}if(!document.hidden){renderTimer();if(tab==='today')updatePlan();}});
-  renderSetup();$('measure-date').value=T.dateKey(now());$('measure-date').max=T.dateKey(now());renderAll();if(store.error)storageError(new Error('本机记录读取异常，已停止写入以保护原数据。请先导出原始恢复文件。'));
+  renderSetup();$('measure-date').value=T.dateKey(now());$('measure-date').max=T.dateKey(now());renderAll();if(store.state.draft&&!store.error)tell('有未完成草稿。请在记录区点「继续未完成的草稿」接着记；草稿不会算作已完成训练。');if(store.error)storageError(new Error('本机记录读取异常，已停止写入以保护原数据。请先导出原始恢复文件。'));
   fetch('log.json').then(r=>{if(!r.ok)throw new Error('旧记录读取失败');return r.json();}).then(data=>{if(!Array.isArray(data))throw new Error('旧记录格式错误');legacy=data.filter(s=>s&&typeof s.date==='string'&&Number.isFinite(Date.parse(s.date))&&Array.isArray(s.exercises));legacyMessage=`保留 ${legacy.length} 条旧版记录，仅展示，不混算新训练。`;renderTree();}).catch(()=>{legacyMessage='旧记录暂时未能读取；本机新记录仍可正常使用。';renderTree();});
 })();

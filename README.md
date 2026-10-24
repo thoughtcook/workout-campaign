@@ -28,8 +28,11 @@ are separate. Walk on lower-body days if preferred; travel time then changes.
 
 Equipment availability has not been verified. Alternatives can be selected and
 actual units/targets adjusted. Changing an exercise or unit clears its actual set
-inputs to prevent reinterpreting previous values. RDL is an alternative rather
-than the initial default, pending technique instruction.
+inputs to prevent reinterpreting previous values. Choosing a named movement
+restores that movement's load unit — goblet squats stay total external load,
+calf raises stay bodyweight, and chest-supported rows stay per hand — instead of
+guessing from words in the name. RDL is an alternative rather than the initial
+default, pending technique instruction.
 
 ## Recommendation rules and limits
 
@@ -123,7 +126,9 @@ boundaries use Asia/Singapore (UTC+8); weeks start Monday.
 ## Files
 
 - `index.html`, `styles.css`: responsive interface
-- `app.js`: journal forms, timeline, accessible SVG charts, timer, backup flows
+- `app.js`: journal forms, timeline, timer and backup flows
+- `session-logging.js`: set text, wall-clock formatting, last-set hints, stepper and copy-load rules
+- `charts.js`: accessible SVG bar and line charts
 - `training-core.js`: pure training rules, validation and aggregation
 - `muscle-map.js`: explicit variant-to-muscle mapping, completion aggregation and vector schematic
 - `journal-store.js`: validated durable storage with stale-write protection

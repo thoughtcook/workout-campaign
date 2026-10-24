@@ -53,7 +53,9 @@
   function isFatigued(r) { return (r.sleep !== null && r.sleep < 6) || (r.energy !== null && r.energy <= 2) || (r.soreness !== null && r.soreness >= 2); }
   function readyKnown(r) { return r.sleep !== null && r.energy !== null && r.soreness !== null && r.pain === 'none'; }
   function completedStrength(s) { return names[s.planId] && plans.some(p=>p.id===s.planId) && s.status==='completed'; }
-  function eligibleBefore(s, at) { return new Date(s.date).getTime() < new Date(at).getTime(); }
+  // Equal timestamps still count. Many saves share the default 06:18 start, and a
+  // strict earlier-than check hid that record from the next draft's last-set hints.
+  function eligibleBefore(s, at) { return new Date(s.date).getTime() <= new Date(at).getTime(); }
   function nextPlan(sessions, at = new Date().toISOString(), readiness = {sleep:null,energy:null,soreness:null,pain:'unknown'}) {
     const past = sessions.filter(s=>eligibleBefore(s,at)).sort((a,b)=>new Date(b.date)-new Date(a.date));
     const completed = past.filter(completedStrength);
@@ -101,11 +103,50 @@
     }
     return result('维持','先把目标范围内的次数做稳；需要连续两次充分记录的达标训练才建议加重。',weight);
   }
+  const defaultMetric = def => def.id==='side-plank'?'seconds':'reps';
+  const variantPresets = {
+    '哑铃卧推':{loadUnit:'per-hand',metric:'reps'},
+    '胸托哑铃划船':{loadUnit:'per-hand',metric:'reps'},
+    '辅助引体向上':{loadUnit:'assistance',metric:'reps'},
+    '绳索侧平举':{loadUnit:'machine',metric:'reps'},
+    '屈膝侧平板':{loadUnit:'body',metric:'seconds',targetLow:15,targetHigh:25},
+    '高脚杯深蹲':{loadUnit:'total',metric:'reps'},
+    '器械臀推':{loadUnit:'machine',metric:'reps'},
+    '滑垫腿弯举':{loadUnit:'body',metric:'reps'},
+    '器械提踵':{loadUnit:'machine',metric:'reps'},
+    '仅伸手的鸟狗式':{loadUnit:'body',metric:'reps'},
+    '上斜器械推胸':{loadUnit:'machine',metric:'reps'},
+    '坐姿划船':{loadUnit:'machine',metric:'reps'},
+    '绳索弯举':{loadUnit:'machine',metric:'reps'},
+    '哑铃罗马尼亚硬拉':{loadUnit:'per-hand',metric:'reps'},
+    '腿举':{loadUnit:'machine',metric:'reps'},
+    '侧平板':{loadUnit:'body',metric:'seconds',targetLow:15,targetHigh:25}
+  };
+  function variantPreset(def, variantName) {
+    if(def && variantName===def.name){
+      const preset={loadUnit:def.unit,metric:defaultMetric(def)};
+      if(def.id==='side-plank'){preset.targetLow=def.low;preset.targetHigh=def.high;}
+      return preset;
+    }
+    return variantPresets[variantName]||null;
+  }
+  function applyVariantChoice(exercise, def) {
+    const preset=variantPreset(def, exercise.variant);
+    if(preset){
+      exercise.metric=preset.metric;
+      exercise.loadUnit=preset.loadUnit;
+      if(preset.targetLow!=null)exercise.targetLow=preset.targetLow;
+      if(preset.targetHigh!=null)exercise.targetHigh=preset.targetHigh;
+    }
+    exercise.equipment=['body','band'].includes(exercise.loadUnit)?'垫上 / 徒手':'';
+    for(const s of exercise.sets){s.load=['body','band'].includes(exercise.loadUnit)?0:null;s.value=null;s.rir=null;s.done=false;}
+    return exercise;
+  }
   function makeExercise(def, sessions, at, readiness, adaptation) {
     const old=sessions.filter(s=>eligibleBefore(s,at)).sort((a,b)=>new Date(b.date)-new Date(a.date)).flatMap(s=>s.exercises||[]).find(e=>e.id===def.id);
     const targetSets=Math.max(1,(adaptation?Math.min(2,def.sets):def.sets)-(isFatigued(readiness)?1:0));
-    const metric=old?.metric||(def.id==='side-plank'?'seconds':'reps');
-    const changed=old && (old.variant!==def.name || old.metric!==(def.id==='side-plank'?'seconds':'reps') || old.loadUnit!==def.unit);
+    const metric=old?.metric||defaultMetric(def);
+    const changed=old && (old.variant!==def.name || old.metric!==defaultMetric(def) || old.loadUnit!==def.unit);
     const loadUnit=old?.loadUnit||def.unit;
     return {id:def.id,name:def.name,variant:old?.variant||def.name,equipment:old?.equipment||(['body','band'].includes(loadUnit)?'垫上 / 徒手':''),loadUnit,metric,targetSets,targetLow:changed?old.targetLow:def.low,targetHigh:changed?old.targetHigh:def.high,form:'unknown',pain:'unknown',sets:Array.from({length:targetSets},()=>({load:['body','band'].includes(loadUnit)?0:null,value:null,rir:null,done:false})),note:''};
   }
@@ -170,5 +211,5 @@
     for(const s of sessions){if(new Date(s.date)>new Date(at))continue;const row=results.find(w=>w.key===weekKey(s.date));if(!row)continue;row.strength+=completedStrength(s)?1:0;row.sets+=s.exercises.reduce((a,e)=>a+e.sets.filter(x=>x.done).length,0);row.cardio+=s.cardioMinutes||0;row.mobility+=s.mobilityMinutes||0;row.recovery+=(s.planId==='recovery'&&s.status==='completed')?1:0;}
     return results;
   }
-  return {ZONE,plans,units,names,clone,dateKey,weekKey,daysBetween,isFatigued,readyKnown,nextPlan,recommend,makeExercise,identity,matchingHistory,fresh,validateState,validateSession,validateMeasurement,mergeBackup,weekly,completedStrength};
+  return {ZONE,plans,units,names,clone,dateKey,weekKey,daysBetween,isFatigued,readyKnown,nextPlan,recommend,makeExercise,applyVariantChoice,identity,matchingHistory,fresh,validateState,validateSession,validateMeasurement,mergeBackup,weekly,completedStrength};
 });
