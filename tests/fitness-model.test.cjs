@@ -7,6 +7,12 @@ const root=path.join(__dirname,'..');
 const model=JSON.parse(fs.readFileSync(path.join(root,'assets/fitness-body.json')));
 const Muscles=require('../muscle-map.js');
 
+function extent(positions,indices,axis){
+  let lo=Infinity,hi=-Infinity;
+  for(const i of new Set(indices)){const v=positions[i*3+axis];if(v<lo)lo=v;if(v>hi)hi=v;}
+  return [lo,hi];
+}
+
 test('fitness surface has real bounded geometry and complete muscle territories',()=>{
   assert.ok(model.positions.length/3>10000);
   assert.ok(model.positions.every(Number.isFinite));
@@ -21,6 +27,48 @@ test('fitness surface has real bounded geometry and complete muscle territories'
   assert.equal(used.size,model.positions.length/3);
   assert.ok(fs.statSync(path.join(root,'assets/fitness-body.json')).size<800000);
 });
+test('athletic presentation adds mass without flipping or leaving the body',async()=>{
+  const {athleticBulk,fiberDirection,PALETTE}=await import(pathToFileURL(path.join(root,'fitness-renderer.mjs')));
+  const out=athleticBulk(model.positions);
+  assert.equal(out.length,model.positions.length);
+  let max=0,head=0,feet=0;
+  for(let i=0;i<out.length;i+=3){
+    assert.ok(Number.isFinite(out[i])&&Number.isFinite(out[i+1])&&Number.isFinite(out[i+2]));
+    max=Math.max(max,Math.hypot(out[i]-model.positions[i],out[i+1]-model.positions[i+1],out[i+2]-model.positions[i+2]));
+    if(model.positions[i+1]>7.85)head=Math.max(head,Math.abs(out[i+1]-model.positions[i+1])+Math.abs(out[i]-model.positions[i]));
+    if(model.positions[i+1]<-7.75)feet=Math.max(feet,Math.hypot(out[i]-model.positions[i],out[i+1]-model.positions[i+1],out[i+2]-model.positions[i+2]));
+  }
+  assert.ok(max>0.25&&max<0.9,`max offset ${max}`);
+  assert.ok(head<0.04&&feet<0.04);
+  const shoulder0=extent(model.positions,model.regions.shoulders,0),shoulder1=extent(out,model.regions.shoulders,0);
+  const chest0=extent(model.positions,model.regions.chest,2),chest1=extent(out,model.regions.chest,2);
+  assert.ok(shoulder1[1]>shoulder0[1]+0.12);
+  assert.ok(chest1[1]>chest0[1]+0.1);
+  let faces=0,flipped=0;
+  for(const indices of Object.values(model.regions)){
+    for(let t=0;t<indices.length;t+=3){
+      const a=indices[t],b=indices[t+1],c=indices[t+2];
+      const sign=(pos)=>{
+        const ax=pos[b*3]-pos[a*3],ay=pos[b*3+1]-pos[a*3+1],az=pos[b*3+2]-pos[a*3+2];
+        const bx=pos[c*3]-pos[a*3],by=pos[c*3+1]-pos[a*3+1],bz=pos[c*3+2]-pos[a*3+2];
+        return [ay*bz-az*by,az*bx-ax*bz,ax*by-ay*bx];
+      };
+      const n0=sign(model.positions),n1=sign(out);
+      if(n0[0]*n1[0]+n0[1]*n1[1]+n0[2]*n1[2]<0)flipped++;
+      faces++;
+    }
+  }
+  assert.ok(flipped/faces<0.005,`${flipped}/${faces} flipped`);
+  for(const sample of [[0,2,0],[1.2,5,0.4],[-3,4,0.2],[1.4,-2,0.5]]){
+    const d=fiberDirection(...sample);
+    assert.ok(Math.abs(Math.hypot(...d)-1)<1e-6);
+  }
+  for(const file of ['fitness-renderer.mjs','muscle-map.js','styles.css']){
+    const text=fs.readFileSync(path.join(root,file),'utf8');
+    for(const hex of [PALETTE.idle,PALETTE.primary,PALETTE.support,PALETTE.energy])assert.ok(text.includes(hex),`${file} ${hex}`);
+  }
+});
+
 test('real Three.js constructs finite smooth normals across region boundaries',async()=>{
   const THREE=await import(pathToFileURL(path.join(root,'vendor/three.module.min.mjs')));
   assert.equal(THREE.REVISION,'170');
@@ -66,4 +114,13 @@ test('viewer initializes actual model, updates regions and accepts zoom controls
   const body=lastScene.children.find(child=>child.isGroup).children[0];
   assert.equal(body.geometry.groups.length,Object.keys(model.regions).length);
   assert.ok([...body.geometry.attributes.color.array].every(Number.isFinite));
+  assert.ok(body.geometry.attributes.fiber);
+  assert.ok(body.geometry.attributes.seam);
+  const chest=body.material.find(m=>m.userData.uniforms.role.value===2);
+  const support=body.material.find(m=>m.userData.uniforms.role.value===1);
+  const idle=body.material.find(m=>m.userData.uniforms.role.value===0);
+  assert.ok(chest&&support&&idle);
+  assert.ok(chest.userData.uniforms.base.value.r>chest.userData.uniforms.base.value.b);
+  assert.ok(support.userData.uniforms.base.value.r>support.userData.uniforms.base.value.b);
+  assert.ok(chest.userData.uniforms.base.value.r>support.userData.uniforms.base.value.r);
 });

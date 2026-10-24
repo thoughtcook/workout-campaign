@@ -3,6 +3,8 @@
 Usage: python3.11 tools/build-fitness-model.py /path/to/source-directory
 Source files: base.obj, male.target, muscle.target. See assets/README.md.
 Muscle territories are approximate surface annotations, not isolated anatomy.
+The athletic silhouette, fiber shading and role colours are applied later by
+fitness-renderer.mjs; this script does not bake them into the JSON.
 """
 import json, sys
 from pathlib import Path

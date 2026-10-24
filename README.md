@@ -58,11 +58,13 @@ References:
 
 ## Muscle mission and phone layout
 
-The home screen includes an original front/back SVG muscle schematic. It is a
-simplified, bilateral teaching diagram, not a diagnostic anatomical atlas or a
-3D model. Tap a region or its labelled chip to inspect the associated exercises.
-Primary targets are amber; supporting regions use teal/dashed outlines; saved
-completed sets fill the regions with green energy. Side selection also supports
+The home screen includes an original front/back SVG muscle schematic and, when
+WebGL is available, the MakeHuman surface with a load-time athletic morph.
+Both are simplified fitness diagrams, not a diagnostic anatomical atlas.
+Tap a region or its labelled chip to inspect the associated exercises.
+The inactive body stays cool gray. Primary targets are saturated orange-red;
+supporting regions are warm gold with a dashed outline on the flat map. Saved
+completed sets fill the regions with green energy from the bottom. Side selection also supports
 keyboard input and labelled controls. The default is one view on phones and
 both views on larger screens; either can be changed.
 
@@ -157,10 +159,10 @@ service worker, so browser caching may require a hard refresh after deployment.
 
 ### 2.2 · 运动人体立体视图
 
-默认使用 MakeHuman CC0 现成人体表面模型与本地 Three.js r170。灰白人物、橙色主要目标、暖金色协同区域；已保存的实际完成组按比例由下向上填入绿色。训练记录仍是唯一能量来源。模型分区是近似的健身表面示意，不是精确解剖边界。
+默认使用 MakeHuman CC0 现成人体表面模型与本地 Three.js r170。查看器在加载时做运动体态变形（肩更宽、胸和背阔肌更厚、手臂与腿更有体积、腰略收），并重算法线；`fitness-body.json` 本身不改，体积仍约 702 KB。静息身体是冷灰金属色，主要目标是饱和橙红并带肌纤维方向，协同区域是暖金，已保存的完成组仍由下向上填入绿色。训练记录仍是唯一能量来源。分区和纤维都是近似健身示意，不是精确解剖。
 
-手机上可左右拖动旋转，点击身体选择肌群，用 ＋／－ 缩放，正面／背面／立体视角切换。纵向手势用于页面滚动。画布按需渲染，像素比上限 1.5；充能短暂动画遵循减少动态效果设置，不持续自动旋转。模型约 702 KB，无运行时第三方 CDN 依赖。
+手机上可左右拖动旋转，点击身体选择肌群，用 ＋／－ 缩放，正面／背面／立体视角切换。纵向手势用于页面滚动。画布按需渲染，像素比上限 1.5；充能短暂动画遵循减少动态效果设置，不持续自动旋转。无运行时第三方 CDN 依赖。WebGL 不可用时，平面图使用同一套灰 / 橙红 / 暖金 / 绿色。
 
 WebGL 不可用、模型下载失败或显卡上下文丢失时保留可操作的平面图与肌群按钮，训练记录不受影响。来源、固定版本、完整许可证和重建方法见 [assets/README.md](assets/README.md)。参考截图只用于确定风格，没有复制其中商业素材。
 
-验证：新增真实几何数据、索引、肌群覆盖、文件体积与 Three.js 法线测试。当前运行环境禁止启动 Chrome，未完成浏览器或真实手机的视觉与性能验收。
+验证：几何、分区、体积、法线、体态变形幅度，以及查看器启动测试。另在无界面 Chrome（约 390px 宽）里看过静息灰、胸推橙红/暖金、半程绿色充能和平面图回退。真机上的触控与性能仍需再看一眼。
