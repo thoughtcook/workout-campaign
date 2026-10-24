@@ -1,9 +1,17 @@
 # Fitness body model
 
-This is a complete outer-surface fitness figure, rendered in grey with orange
-training targets and green recorded-set progress. It contains no internal
+This is a complete outer-surface fitness figure. The viewer paints the inactive
+body in cool gray, primary targets in saturated orange-red, supporting regions
+in warm gold, and recorded-set progress in green. It contains no internal
 anatomical structures. Surface territories are approximate fitness annotations;
 they do not identify isolated anatomical muscles or measure activation.
+
+`fitness-renderer.mjs` applies an athletic presentation morph when the model
+loads: broader shoulders, a thicker chest and lats, fuller arms and legs, and a
+slight waist taper, then recomputes smooth normals. Shading adds a fiber
+direction and region-boundary separation. That morph is not baked into
+`fitness-body.json`, so rebuilding the source surface does not remove it and
+does not increase the checked-in file size.
 
 ## Source and licence
 
@@ -29,8 +37,9 @@ geometry is retained, with smooth normals calculated at runtime. Dark surface
 shading indicates training shorts. This asset has 13,380 vertices / 26,756
 triangles and occupies about 702 KB before HTTP compression.
 
-To rebuild, download the three files above from the pinned commit, save them as
-`base.obj`, `male.target` and `muscle.target` in a temporary directory, then run:
+To rebuild the source surface, download the three files above from the pinned
+commit, save them as `base.obj`, `male.target` and `muscle.target` in a
+temporary directory, then run:
 
 ```sh
 python3.11 tools/build-fitness-model.py /path/to/source-directory

@@ -5,7 +5,7 @@
   function status(message){document.getElementById('fitness-status').textContent=message;}
   async function start(){
     try{
-      const {createViewer}=await import('./fitness-renderer.mjs?v=5');
+      const {createViewer}=await import('./fitness-renderer.mjs?v=6');
       viewer=await createViewer(host(),id=>document.dispatchEvent(new CustomEvent('fitness-select',{detail:id})));
       document.getElementById('body-model').hidden=true;
       host().classList.add('ready');
