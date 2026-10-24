@@ -5,13 +5,14 @@
   function status(message){document.getElementById('fitness-status').textContent=message;}
   async function start(){
     try{
-      const {createViewer}=await import('./fitness-renderer.mjs?v=4');
+      const {createViewer}=await import('./fitness-renderer.mjs?v=5');
       viewer=await createViewer(host(),id=>document.dispatchEvent(new CustomEvent('fitness-select',{detail:id})));
       document.getElementById('body-model').hidden=true;
       host().classList.add('ready');
       status('左右拖动旋转 · 点按肌群 · ＋／－缩放');
       viewer.update(latest);
     }catch(error){
+      console.error('Fitness model initialization failed:',error);
       viewer=null;
       status('立体模型暂不可用，已显示可操作的肌群平面图。');
       host().classList.remove('ready');host().replaceChildren();

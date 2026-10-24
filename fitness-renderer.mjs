@@ -41,7 +41,7 @@ export async function createViewer(host,onSelect){
         totalEmissiveRadiance += vec3(.16,.7,.30)*filled*(.12+bodyGlow);`);
     };
     geometry.addGroup(offset,indices.length,materials.length);offset+=indices.length;
-    materials.push(material);regions.push({id,material,uniforms});meshBounds[id]={min,max};
+    materials.push(material);regions.push({id,material,uniforms});
   }
   const mesh=new THREE.Mesh(geometry,materials);body.add(mesh);
   // Source is a complete CC0 outer surface; no internal anatomical meshes.

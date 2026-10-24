@@ -34,3 +34,36 @@ test('real Three.js constructs finite smooth normals across region boundaries',a
   const shader=THREE.ShaderLib.standard.fragmentShader;
   assert.ok(shader.indexOf('vec3 totalEmissiveRadiance')<shader.indexOf('#include <color_fragment>'));
 });
+
+test('viewer initializes actual model, updates regions and accepts zoom controls',async(t)=>{
+  // Replace only the GPU renderer and browser I/O. Execute the complete viewer
+  // with real Three.js geometry/materials to catch initialization exceptions.
+  const rendererPath=path.join(root,'fitness-renderer.mjs');
+  const threeURL=pathToFileURL(path.join(root,'vendor/three.module.min.mjs')).href;
+  let source=fs.readFileSync(rendererPath,'utf8')
+    .replace("'./vendor/three.module.min.mjs'",JSON.stringify(threeURL))
+    .replace('new THREE.WebGLRenderer(', 'globalThis.__fitnessTestRenderer(')
+    .replaceAll('import.meta.url',JSON.stringify(pathToFileURL(rendererPath).href));
+  let renders=0,lastScene;
+  const canvas={setAttribute(){},addEventListener(){}};
+  const globals={
+    __fitnessTestRenderer:()=>({domElement:canvas,setPixelRatio(){},setSize(){},dispose(){},render(scene){renders++;lastScene=scene;}}),
+    window:{devicePixelRatio:2,matchMedia:()=>({matches:true})},
+    document:{hidden:false,addEventListener(){}},
+    ResizeObserver:class{observe(){}},
+    fetch:async()=>({ok:true,json:async()=>model}),
+    cancelAnimationFrame(){}
+  };
+  for(const [key,value]of Object.entries(globals)){const descriptor=Object.getOwnPropertyDescriptor(globalThis,key);Object.defineProperty(globalThis,key,{configurable:true,writable:true,value});t.after(()=>{if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];});}
+  const {createViewer}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+  const host={clientWidth:350,clientHeight:420,getBoundingClientRect:()=>({width:350}),replaceChildren(child){assert.equal(child,canvas);}};
+  const viewer=await createViewer(host,()=>{});
+  const data=Muscles.summarize([{variant:'器械胸推',targetSets:2}],[]);
+  viewer.update({data,side:'front',selected:'chest',animate:false});
+  viewer.command('in');viewer.command('out');viewer.command('reset');
+  viewer.update({data,side:'back',selected:'triceps',animate:false});
+  assert.ok(renders>=6);
+  const body=lastScene.children.find(child=>child.isGroup).children[0];
+  assert.equal(body.geometry.groups.length,Object.keys(model.regions).length);
+  assert.ok([...body.geometry.attributes.color.array].every(Number.isFinite));
+});
