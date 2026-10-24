@@ -154,3 +154,13 @@ https://thoughtcook.github.io/workout-campaign/
 
 Publishing code does not publish new browser-local journal data. There is no
 service worker, so browser caching may require a hard refresh after deployment.
+
+### 2.2 · 运动人体立体视图
+
+默认使用 MakeHuman CC0 现成人体表面模型与本地 Three.js r170。灰白人物、橙色主要目标、暖金色协同区域；已保存的实际完成组按比例由下向上填入绿色。训练记录仍是唯一能量来源。模型分区是近似的健身表面示意，不是精确解剖边界。
+
+手机上可左右拖动旋转，点击身体选择肌群，用 ＋／－ 缩放，正面／背面／立体视角切换。纵向手势用于页面滚动。画布按需渲染，像素比上限 1.5；充能短暂动画遵循减少动态效果设置，不持续自动旋转。模型约 702 KB，无运行时第三方 CDN 依赖。
+
+WebGL 不可用、模型下载失败或显卡上下文丢失时保留可操作的平面图与肌群按钮，训练记录不受影响。来源、固定版本、完整许可证和重建方法见 [assets/README.md](assets/README.md)。参考截图只用于确定风格，没有复制其中商业素材。
+
+验证：新增真实几何数据、索引、肌群覆盖、文件体积与 Three.js 法线测试。当前运行环境禁止启动 Chrome，未完成浏览器或真实手机的视觉与性能验收。

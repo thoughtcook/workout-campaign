@@ -1,11 +1,11 @@
 {
   "name": "workout-campaign",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "description": "A buildless, browser-local gym training journal",
   "scripts": {
     "test": "node --test tests/*.test.cjs",
-    "check": "node --check app.js && node --check training-core.js && node --check journal-store.js && node --check muscle-map.js"
+    "check": "node --check app.js && node --check training-core.js && node --check journal-store.js && node --check muscle-map.js && node --check fitness-view.js && node --check fitness-renderer.mjs"
   },
   "engines": { "node": ">=18" }
 }
