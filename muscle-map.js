@@ -78,8 +78,8 @@
     const defs=[],regions=[];
     for(const [id,paths] of Object.entries(SHAPE[side])){
       const g=data.groups[id],gradient=`body-${side}-${id}`,percent=g.percent;
-      const base=g.state==='idle'?'#24372f':g.secondary?'#274b49':'#5a4b2d';
-      defs.push(`<linearGradient id="${gradient}" x1="0" y1="0" x2="0" y2="1"><stop offset="${100-percent}%" stop-color="${base}"/><stop offset="${100-percent}%" stop-color="#b9f3a1"/><stop offset="100%" stop-color="#6edca1"/></linearGradient>`);
+      const base=g.state==='idle'?'#8d9aa3':g.secondary?'#e09634':'#ff3a16';
+      defs.push(`<linearGradient id="${gradient}" x1="0" y1="0" x2="0" y2="1"><stop offset="${100-percent}%" stop-color="${base}"/><stop offset="${100-percent}%" stop-color="#b8f5c8"/><stop offset="100%" stop-color="#2fce6a"/></linearGradient>`);
       const label=`${g.name}，${g.state==='idle'?'未列入本次训练':g.secondary?'协同参与':'主要训练'}，已记录 ${g.donePrimary+g.doneSecondary} 组，目标 ${g.targetPrimary+g.targetSecondary} 组`;
       const geometry=paths.map(p=>`<path d="${p}"/><path d="${p}" transform="translate(240 0) scale(-1 1)"/>`).join('');
       regions.push(`<g class="muscle-region state-${g.state}${g.secondary?' secondary':''}${selected===id?' selected':''}${animate&&percent>0?' energy-inject':''}" data-muscle="${id}" role="button" tabindex="0" aria-label="${escape(label)}" aria-pressed="${selected===id}" style="fill:url(#${gradient})"><title>${escape(label)}</title>${geometry}</g>`);

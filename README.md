@@ -61,13 +61,15 @@ References:
 
 ## Muscle mission and phone layout
 
-The home screen includes an original front/back SVG muscle schematic. It is a
-simplified, bilateral teaching diagram, not a diagnostic anatomical atlas or a
-3D model. Tap a region or its labelled chip to inspect the associated exercises.
-Primary targets are amber; supporting regions use teal/dashed outlines; saved
-completed sets fill the regions with green energy. Side selection also supports
-keyboard input and labelled controls. The default is one view on phones and
-both views on larger screens; either can be changed.
+The home screen includes an original front/back SVG muscle schematic and, when
+WebGL is available, a muscular male surface. Both are simplified fitness
+diagrams, not a diagnostic anatomical atlas. Tap a region or its labelled chip
+to inspect the associated exercises. The inactive body stays cool gray. Primary
+targets are saturated orange-red; supporting regions are warm gold with a
+dashed outline on the flat map. Saved completed sets fill the regions with
+green energy from the bottom. Side selection also supports keyboard input and
+labelled controls. The default is one view on phones and both views on larger
+screens; either can be changed.
 
 Goal mode uses the selected plan or active draft's actual exercise variants and
 target sets. Logged mode uses saved records on the chosen UTC+8 calendar day.
@@ -131,6 +133,7 @@ boundaries use Asia/Singapore (UTC+8); weeks start Monday.
 - `charts.js`: accessible SVG bar and line charts
 - `training-core.js`: pure training rules, validation and aggregation
 - `muscle-map.js`: explicit variant-to-muscle mapping, completion aggregation and vector schematic
+- `fitness-renderer.mjs`, `fitness-view.js`, `assets/strong-body.glb`: WebGL figure and flat-map fallback
 - `journal-store.js`: validated durable storage with stale-write protection
 - `log.json`: unchanged read-only legacy records
 - `tests/training.test.cjs`: progression, schema, backup and storage regressions
@@ -160,12 +163,14 @@ https://thoughtcook.github.io/workout-campaign/
 Publishing code does not publish new browser-local journal data. There is no
 service worker, so browser caching may require a hard refresh after deployment.
 
-### 2.2 · 运动人体立体视图
+### 2.3 · 强壮人体立体视图
 
-默认使用 MakeHuman CC0 现成人体表面模型与本地 Three.js r170。灰白人物、橙色主要目标、暖金色协同区域；已保存的实际完成组按比例由下向上填入绿色。训练记录仍是唯一能量来源。模型分区是近似的健身表面示意，不是精确解剖边界。
+立体人物换成 Orthovasky 在 Sketchfab 发布的「Male Human Strong Body - Free / Downloadable」（[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)）。作者页面：https://sketchfab.com/orthovasky 。模型页：https://sketchfab.com/3d-models/male-human-strong-body-free-downloadable-c370d7b22dd249129acad646e04d2452 。这是衍生作品：减面，并标了近似肌群，不表示作者为本应用背书。
 
-手机上可左右拖动旋转，点击身体选择肌群，用 ＋／－ 缩放，正面／背面／立体视角切换。纵向手势用于页面滚动。画布按需渲染，像素比上限 1.5；充能短暂动画遵循减少动态效果设置，不持续自动旋转。模型约 702 KB，无运行时第三方 CDN 依赖。
+原文件约 35MB、126 万个三角面，没有 UV，也没有肌群分组，直接放进 GitHub Pages 对手机过重。页面加载的是 `assets/strong-body.glb`：同一表面减到约 5 万顶点、10 万三角面，大约 1.2MB。没有用 Draco 或 meshopt，因为仓库里的 Three.js r170 核心文件不带对应解码器，页面自己解析这个 GLB。以前的 MakeHuman 网格和加载时体态变形不再使用，避免两套身体叠在一起。
 
-WebGL 不可用、模型下载失败或显卡上下文丢失时保留可操作的平面图与肌群按钮，训练记录不受影响。来源、固定版本、完整许可证和重建方法见 [assets/README.md](assets/README.md)。参考截图只用于确定风格，没有复制其中商业素材。
+静息身体是冷灰，主要目标是饱和橙红，协同区域是暖金，已保存的完成组仍从该分区底部向上填入绿色。训练记录仍是唯一能量来源。分区按这具网格的体表位置重标，是健身示意，不是精确解剖。能量计算和 `workout-campaign.v2` 没有改。
 
-验证：新增真实几何数据、索引、肌群覆盖、文件体积与 Three.js 法线测试。当前运行环境禁止启动 Chrome，未完成浏览器或真实手机的视觉与性能验收。
+手机上可左右拖动旋转，点击身体选择肌群，用 ＋／－ 缩放，正面／背面／立体视角切换。纵向手势用于页面滚动。画布按需渲染，像素比上限 1.5；充能短暂动画遵循减少动态效果设置，不持续自动旋转。无运行时第三方 CDN 依赖。WebGL 不可用时，平面图使用同一套灰 / 橙红 / 暖金 / 绿色。
+
+WebGL 不可用、模型下载失败或显卡上下文丢失时保留可操作的平面图与肌群按钮，训练记录不受影响。来源、减面说明和署名见 [assets/README.md](assets/README.md)。
